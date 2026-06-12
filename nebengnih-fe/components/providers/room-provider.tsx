@@ -19,6 +19,7 @@ type RoomAction =
   | { type: "set-passenger-joining"; id: string; joiningToday: boolean }
   | { type: "set-route-metrics"; routeMetrics: RouteMetrics }
   | { type: "upsert-passenger"; passenger: Passenger }
+  | { type: "reorder-passengers"; passengerIds: string[] }
   | { type: "move-passenger"; id: string; direction: "up" | "down" }
   | { type: "remove-passenger"; id: string }
 
@@ -35,6 +36,7 @@ type RoomContextValue = {
   setPassengerJoining: (id: string, joiningToday: boolean) => void
   setRouteMetrics: (routeMetrics: RouteMetrics) => void
   upsertPassenger: (passenger: Passenger) => void
+  reorderPassengers: (passengerIds: string[]) => void
   movePassenger: (id: string, direction: "up" | "down") => void
   removePassenger: (id: string) => void
   refreshRoom: () => Promise<void>
@@ -133,6 +135,23 @@ function roomReducer(state: RoomState, action: RoomAction): RoomState {
       return {
         ...state,
         passengers,
+      }
+    }
+    case "reorder-passengers": {
+      const byId = new Map(
+        state.passengers.map((passenger) => [passenger.id, passenger])
+      )
+      const ordered = action.passengerIds
+        .map((id) => byId.get(id))
+        .filter((passenger): passenger is Passenger => Boolean(passenger))
+      const orderedIds = new Set(action.passengerIds)
+
+      return {
+        ...state,
+        passengers: [
+          ...ordered,
+          ...state.passengers.filter((passenger) => !orderedIds.has(passenger.id)),
+        ],
       }
     }
     case "move-passenger": {
@@ -269,6 +288,8 @@ export function RoomProvider({
         dispatch({ type: "set-route-metrics", routeMetrics }),
       upsertPassenger: (passenger: Passenger) =>
         dispatch({ type: "upsert-passenger", passenger }),
+      reorderPassengers: (passengerIds: string[]) =>
+        dispatch({ type: "reorder-passengers", passengerIds }),
       movePassenger: (id: string, direction: "up" | "down") =>
         dispatch({ type: "move-passenger", id, direction }),
       removePassenger: (id: string) => dispatch({ type: "remove-passenger", id }),

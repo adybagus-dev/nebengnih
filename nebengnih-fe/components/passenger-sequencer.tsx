@@ -1,27 +1,84 @@
 "use client"
 
-import { ArrowDown, ArrowUp, Navigation, Plus, SlidersHorizontal, Check } from "lucide-react"
+import { useState } from "react"
+import { ArrowDown, ArrowUp, Check, LoaderCircle, Plus, Sparkles, SlidersHorizontal } from "lucide-react"
 import Link from "next/link"
 import { useRoom } from "@/components/providers/room-provider"
 import { formatMoney } from "@/lib/room/calculations"
+import { optimizePassengerOrder } from "@/lib/room/osrm"
 
 export function PassengerSequencer() {
-  const { room, summary, movePassenger, setPassengerJoining } = useRoom()
+  const [optimizing, setOptimizing] = useState(false)
+  const [optimizationMessage, setOptimizationMessage] = useState("")
+  const {
+    room,
+    summary,
+    movePassenger,
+    reorderPassengers,
+    setPassengerJoining,
+  } = useRoom()
+
+  async function handleOptimize() {
+    setOptimizing(true)
+    setOptimizationMessage("")
+
+    try {
+      const optimizedIds = await optimizePassengerOrder(
+        room.settings,
+        room.passengers
+      )
+      const inactiveIds = room.passengers
+        .filter((passenger) => !optimizedIds.includes(passenger.id))
+        .map((passenger) => passenger.id)
+      reorderPassengers([...optimizedIds, ...inactiveIds])
+      setOptimizationMessage(
+        optimizedIds.length < 2
+          ? "The current order is already ready."
+          : "Pickup order optimized for the road route."
+      )
+    } catch (error) {
+      setOptimizationMessage(
+        error instanceof Error ? error.message : "Could not optimize the route."
+      )
+    } finally {
+      setOptimizing(false)
+    }
+  }
 
   return (
     <section className="px-4 pt-5" aria-label="Passenger lineup">
-      <div className="mb-3 flex items-center justify-between gap-2">
+      <div className="mb-3">
         <h2 className="flex items-center gap-2 text-base font-semibold text-foreground">
           <span aria-hidden="true">🗓️</span>
           Today&apos;s Lineup &amp; Cost Split
         </h2>
-        <Link
-          href={`/driver/${room.roomCode}/edit`}
-          className="flex shrink-0 items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-primary hover:text-primary active:scale-95"
-        >
-          <SlidersHorizontal className="size-3.5" />
-          Edit Route &amp; Costs
-        </Link>
+        <div className="mt-2 flex gap-2">
+          <button
+            type="button"
+            onClick={() => void handleOptimize()}
+            disabled={optimizing}
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-emerald-50 px-2.5 py-2 text-xs font-semibold text-emerald-700 transition-transform active:scale-[0.98] disabled:opacity-60"
+          >
+            {optimizing ? (
+              <LoaderCircle className="size-3.5 animate-spin" />
+            ) : (
+              <Sparkles className="size-3.5" />
+            )}
+            {optimizing ? "Optimizing..." : "Optimize order"}
+          </button>
+          <Link
+            href={`/driver/${room.roomCode}/edit`}
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-2 text-xs font-medium text-muted-foreground transition-colors hover:border-primary hover:text-primary active:scale-95"
+          >
+            <SlidersHorizontal className="size-3.5" />
+            Edit route
+          </Link>
+        </div>
+        {optimizationMessage ? (
+          <p className="mt-2 text-xs font-medium text-muted-foreground" role="status">
+            {optimizationMessage}
+          </p>
+        ) : null}
       </div>
 
       <ul className="flex flex-col gap-2.5">
@@ -126,18 +183,6 @@ function PassengerCard({
         <p className="truncate text-sm font-semibold text-foreground">{name}</p>
         <p className="truncate text-xs text-muted-foreground">({status})</p>
       </div>
-
-      {active ? (
-        <a
-          href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(status)}`}
-          target="_blank"
-          rel="noreferrer"
-          className="flex shrink-0 items-center gap-1 rounded-lg bg-accent px-2.5 py-1.5 text-xs font-semibold text-accent-foreground shadow-sm ring-1 ring-primary/15 transition-transform active:scale-95"
-        >
-          <Navigation className="size-3.5" />
-          Open Map
-        </a>
-      ) : null}
 
       <span
         className={`shrink-0 text-right font-mono text-xs font-bold tabular-nums ${

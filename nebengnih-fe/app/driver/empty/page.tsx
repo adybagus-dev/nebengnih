@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { CheckSquare } from "lucide-react"
+import { AlertCircle, CheckSquare } from "lucide-react"
 import { AppHeader } from "@/components/app-header"
 import { RouteSettingsCard } from "@/components/route-settings-card"
 import { InviteLinkSheet } from "@/components/invite-link-sheet"
@@ -11,6 +11,7 @@ import { persistRoom } from "@/lib/room/repository"
 export default function DriverEmptyStatePage() {
   const [inviteOpen, setInviteOpen] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState("")
   const { room, createRoom } = useRoom()
 
   useEffect(() => {
@@ -20,6 +21,25 @@ export default function DriverEmptyStatePage() {
 
   async function handleSaveRoute() {
     if (!room.roomCode) return
+    const hasOrigin =
+      room.settings.origin.trim() &&
+      Number.isFinite(room.settings.originLat) &&
+      Number.isFinite(room.settings.originLng)
+    const hasDestination =
+      room.settings.destination.trim() &&
+      Number.isFinite(room.settings.destinationLat) &&
+      Number.isFinite(room.settings.destinationLng)
+
+    if (!hasOrigin || !hasDestination) {
+      setSaveError(
+        !hasOrigin
+          ? "Choose and confirm your start location before saving."
+          : "Choose and confirm your destination before saving."
+      )
+      return
+    }
+
+    setSaveError("")
     setSaving(true)
     try {
       await persistRoom(room, { trackAsDriver: true })
@@ -38,6 +58,15 @@ export default function DriverEmptyStatePage() {
       </main>
 
       <footer className="fixed inset-x-0 bottom-0 z-20 mx-auto max-w-md border-t border-border bg-background/80 px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur-lg">
+        {saveError ? (
+          <div
+            role="alert"
+            className="mb-2 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900"
+          >
+            <AlertCircle className="mt-0.5 size-4 shrink-0" />
+            <span>{saveError}</span>
+          </div>
+        ) : null}
         <button
           type="button"
           disabled={saving}
