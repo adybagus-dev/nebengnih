@@ -1,7 +1,7 @@
 import { createClient } from "@supabase/supabase-js"
 import { normalizeRoomState } from "./state"
 import { getRoomStorageKey, loadRoomState, saveRoomState } from "./storage"
-import type { RoomState } from "./types"
+import type { Passenger, RoomState } from "./types"
 
 type RoomRecord = {
   code: string
@@ -101,4 +101,30 @@ export async function persistRoom(
 
   saveRoomState(room, options)
   return room
+}
+
+export async function persistPassenger(
+  roomCode: string,
+  passenger: Passenger
+): Promise<RoomState> {
+  const normalizedCode = roomCode.toUpperCase()
+  const response = await fetch(
+    `/api/rooms/${encodeURIComponent(normalizedCode)}/passengers`,
+    {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ passenger }),
+    }
+  )
+  const body = (await response.json().catch(() => null)) as
+    | { room?: RoomState; error?: string }
+    | null
+
+  if (!response.ok || !body?.room) {
+    throw new Error(body?.error ?? "Could not save location status")
+  }
+
+  return normalizeRoomState(normalizedCode, body.room)
 }

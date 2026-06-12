@@ -8,7 +8,7 @@ import { PickupMapPreview } from "@/components/pickup-map-preview"
 import { RoomHeader } from "@/components/room-header"
 import { calculateRoomSummary, estimateDetourKm } from "@/lib/room/calculations"
 import { createDefaultRoomState } from "@/lib/room/defaults"
-import { fetchRoom, persistRoom, roomExists } from "@/lib/room/repository"
+import { fetchRoom, persistPassenger, roomExists } from "@/lib/room/repository"
 import type { RoomState } from "@/lib/room/types"
 
 interface RoomPassengerSessionProps {
@@ -112,31 +112,18 @@ export function RoomPassengerSession({ roomCode }: RoomPassengerSessionProps) {
     setSaveStatus("idle")
     setSaveError("")
 
-    const nextRoom: RoomState = {
-      ...room,
-      roomCode: normalizedCode,
-      passengers: (() => {
-        const nextPassenger = {
-          id: passengerId,
-          name: name.trim() || "Guest",
-          pickupLandmark: landmark.trim() || "Nearby landmark",
-          pickupLat: pickupCoordinates.lat,
-          pickupLng: pickupCoordinates.lng,
-          detourKm: estimatedDetourKm,
-          joiningToday: joining,
-        }
-
-        const index = room.passengers.findIndex((passenger) => passenger.id === passengerId)
-        if (index === -1) return [...room.passengers, nextPassenger]
-
-        const passengers = [...room.passengers]
-        passengers[index] = nextPassenger
-        return passengers
-      })(),
+    const nextPassenger = {
+      id: passengerId,
+      name: name.trim() || "Guest",
+      pickupLandmark: landmark.trim() || "Nearby landmark",
+      pickupLat: pickupCoordinates.lat,
+      pickupLng: pickupCoordinates.lng,
+      detourKm: estimatedDetourKm,
+      joiningToday: joining,
     }
 
     try {
-      const persisted = await persistRoom(nextRoom)
+      const persisted = await persistPassenger(normalizedCode, nextPassenger)
       setRoom(persisted)
       setSaveStatus("saved")
     } catch (error) {
