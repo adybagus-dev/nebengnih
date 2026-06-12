@@ -20,6 +20,18 @@ function formatDateLabel() {
   })
 }
 
+function cleanLabel(value: string) {
+  return value
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .join(", ")
+}
+
+function cleanText(value: string) {
+  return value.trim().replace(/\s+/g, " ")
+}
+
 export function generateRoomCode() {
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
   let suffix = ""
@@ -75,7 +87,7 @@ export function calculateRoomSummary(room: RoomState): RoomSummary {
     }
   })
 
-  const shareUrl = `https://nebengnih.app/room/${room.roomCode}`
+  const shareUrl = roomShareUrl(room.roomCode)
 
   return {
     roomCode: room.roomCode,
@@ -96,13 +108,24 @@ export function calculateRoomSummary(room: RoomState): RoomSummary {
   }
 }
 
+function getPublicAppUrl() {
+  const configured = process.env.NEXT_PUBLIC_APP_URL?.trim()
+  if (configured) return configured.replace(/\/$/, "")
+  if (process.env.NODE_ENV === "production") return "https://nebengnih.app"
+  return "http://localhost:3000"
+}
+
+export function roomShareUrl(roomCode: string) {
+  return `${getPublicAppUrl()}/room/${roomCode.toUpperCase()}`
+}
+
 export function buildLedgerText(summary: RoomSummary) {
   const lines = [
     "🚗 NEBENGNIH DAILY REPORT 🚗",
     `Date: ${formatDateLabel()}`,
     `Room: ${summary.roomCode}`,
     `Driver: ${summary.driverNickname}`,
-    `Route: ${summary.origin} → ${summary.destination}`,
+    `Route: ${cleanLabel(summary.origin)} → ${cleanLabel(summary.destination)}`,
     "",
     "Pickup Route Sequence:",
     "-----------------------",
@@ -113,7 +136,7 @@ export function buildLedgerText(summary: RoomSummary) {
   } else {
     summary.passengerBills.forEach((passenger) => {
       lines.push(
-        `${passenger.order}. ${passenger.name} ➔ 📍 ${passenger.pickupLandmark}`,
+        `${passenger.order}. ${cleanText(passenger.name)} ➔ 📍 ${cleanLabel(passenger.pickupLandmark)}`,
         `   Bill: ${formatMoney(passenger.total)}`
       )
     })

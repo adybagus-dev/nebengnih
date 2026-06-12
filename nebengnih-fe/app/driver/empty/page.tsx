@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { CheckSquare } from "lucide-react"
 import { AppHeader } from "@/components/app-header"
 import { RouteSettingsCard } from "@/components/route-settings-card"
@@ -11,13 +11,22 @@ import { persistRoom } from "@/lib/room/repository"
 export default function DriverEmptyStatePage() {
   const [inviteOpen, setInviteOpen] = useState(false)
   const [saving, setSaving] = useState(false)
-  const { room } = useRoom()
+  const { room, createRoom } = useRoom()
+
+  useEffect(() => {
+    if (room.roomCode) return
+    createRoom()
+  }, [createRoom, room.roomCode])
 
   async function handleSaveRoute() {
+    if (!room.roomCode) return
     setSaving(true)
-    await persistRoom(room, { trackAsDriver: true })
-    setSaving(false)
-    setInviteOpen(true)
+    try {
+      await persistRoom(room, { trackAsDriver: true })
+      setInviteOpen(true)
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (

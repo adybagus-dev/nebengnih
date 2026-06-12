@@ -8,7 +8,7 @@ import { PickupMapPreview } from "@/components/pickup-map-preview"
 import { RoomHeader } from "@/components/room-header"
 import { calculateRoomSummary, estimateDetourKm } from "@/lib/room/calculations"
 import { createDefaultRoomState } from "@/lib/room/defaults"
-import { ensureRoom, persistRoom } from "@/lib/room/repository"
+import { fetchRoom, persistRoom, roomExists } from "@/lib/room/repository"
 import type { RoomState } from "@/lib/room/types"
 
 interface RoomPassengerSessionProps {
@@ -20,50 +20,70 @@ const DEFAULT_PICKUP_COORDINATES = {
   lng: 106.799,
 }
 
+function getPassengerId(roomCode: string) {
+  if (typeof window === "undefined") return "passenger-local"
+
+  const storageKey = `nebengnih.passenger.id.${roomCode}`
+  const existing = window.localStorage.getItem(storageKey)
+  if (existing) return existing
+
+  const passengerId = crypto.randomUUID()
+  window.localStorage.setItem(storageKey, passengerId)
+  return passengerId
+}
+
 export function RoomPassengerSession({ roomCode }: RoomPassengerSessionProps) {
   const normalizedCode = roomCode.toUpperCase()
   const [room, setRoom] = useState<RoomState>(() => createDefaultRoomState(normalizedCode))
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [passengerId, setPassengerId] = useState("passenger-local")
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saved" | "error">("idle")
+  const [saveError, setSaveError] = useState("")
+  const [roomMissing, setRoomMissing] = useState(false)
+  const [loadError, setLoadError] = useState("")
+  const [passengerId] = useState(() => getPassengerId(normalizedCode))
   const [name, setName] = useState("")
   const [landmark, setLandmark] = useState("Current location")
   const [joining, setJoining] = useState(true)
   const [pickupCoordinates, setPickupCoordinates] = useState(DEFAULT_PICKUP_COORDINATES)
 
   useEffect(() => {
-    const storageKey = `nebengnih.passenger.id.${normalizedCode}`
-    const existing = window.localStorage.getItem(storageKey)
-    if (existing) {
-      setPassengerId(existing)
-    } else {
-      const next = crypto.randomUUID()
-      window.localStorage.setItem(storageKey, next)
-      setPassengerId(next)
-    }
-  }, [normalizedCode])
-
-  useEffect(() => {
     let mounted = true
 
     async function loadRoom() {
       setLoading(true)
-      const loaded = await ensureRoom(normalizedCode)
-      if (!mounted) return
-      setRoom(loaded)
+      setLoadError("")
 
-      const existing = loaded.passengers.find((passenger) => passenger.id === passengerId)
-      if (existing) {
-        setName(existing.name)
-        setLandmark(existing.pickupLandmark)
-        setJoining(existing.joiningToday)
-        setPickupCoordinates(
-          existing.pickupLat !== undefined && existing.pickupLng !== undefined
-            ? { lat: existing.pickupLat, lng: existing.pickupLng }
-            : DEFAULT_PICKUP_COORDINATES
-        )
+      try {
+        const exists = await roomExists(normalizedCode)
+        if (!mounted) return
+
+        if (!exists) {
+          setRoomMissing(true)
+          return
+        }
+
+        const loaded = await fetchRoom(normalizedCode)
+        if (!mounted) return
+        setRoom(loaded)
+
+        const existing = loaded.passengers.find((passenger) => passenger.id === passengerId)
+        if (existing) {
+          setName(existing.name)
+          setLandmark(existing.pickupLandmark)
+          setJoining(existing.joiningToday)
+          setPickupCoordinates(
+            existing.pickupLat !== undefined && existing.pickupLng !== undefined
+              ? { lat: existing.pickupLat, lng: existing.pickupLng }
+              : DEFAULT_PICKUP_COORDINATES
+          )
+        }
+      } catch (error) {
+        if (!mounted) return
+        setLoadError(error instanceof Error ? error.message : "Unable to load this room.")
+      } finally {
+        if (mounted) setLoading(false)
       }
-      setLoading(false)
     }
 
     void loadRoom()
@@ -73,11 +93,25 @@ export function RoomPassengerSession({ roomCode }: RoomPassengerSessionProps) {
     }
   }, [normalizedCode, passengerId])
 
+  useEffect(() => {
+    if (saveStatus !== "saved") return
+
+    const timeout = window.setTimeout(() => {
+      setSaveStatus("idle")
+    }, 2200)
+
+    return () => window.clearTimeout(timeout)
+  }, [saveStatus])
+
   const summary = useMemo(() => calculateRoomSummary(room), [room])
   const estimatedDetourKm = estimateDetourKm(landmark)
   const estimatedShare = summary.baseShare + estimatedDetourKm * summary.fuelCostPerKm
 
   async function handleSave() {
+    setSaving(true)
+    setSaveStatus("idle")
+    setSaveError("")
+
     const nextRoom: RoomState = {
       ...room,
       roomCode: normalizedCode,
@@ -101,10 +135,16 @@ export function RoomPassengerSession({ roomCode }: RoomPassengerSessionProps) {
       })(),
     }
 
-    setSaving(true)
-    const persisted = await persistRoom(nextRoom)
-    setRoom(persisted)
-    setSaving(false)
+    try {
+      const persisted = await persistRoom(nextRoom)
+      setRoom(persisted)
+      setSaveStatus("saved")
+    } catch (error) {
+      setSaveStatus("error")
+      setSaveError(error instanceof Error ? error.message : "Failed to save your location status.")
+    } finally {
+      setSaving(false)
+    }
   }
 
   if (loading) {
@@ -115,6 +155,36 @@ export function RoomPassengerSession({ roomCode }: RoomPassengerSessionProps) {
           <div className="rounded-3xl border border-border bg-card px-5 py-6 text-center shadow-sm">
             <p className="text-base font-semibold text-foreground">Loading room...</p>
             <p className="mt-1 text-sm text-muted-foreground">Please wait while we open the shared room.</p>
+          </div>
+        </main>
+      </div>
+    )
+  }
+
+  if (roomMissing) {
+    return (
+      <div className="relative mx-auto flex min-h-screen w-full max-w-md flex-col bg-background">
+        <RoomHeader roomCode={normalizedCode} />
+        <main className="flex flex-1 items-center justify-center px-4">
+          <div className="rounded-3xl border border-border bg-card px-5 py-6 text-center shadow-sm">
+            <p className="text-base font-semibold text-foreground">Room not found</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Double-check the room code with the driver. This room has not been created yet.
+            </p>
+          </div>
+        </main>
+      </div>
+    )
+  }
+
+  if (loadError) {
+    return (
+      <div className="relative mx-auto flex min-h-screen w-full max-w-md flex-col bg-background">
+        <RoomHeader roomCode={normalizedCode} />
+        <main className="flex flex-1 items-center justify-center px-4">
+          <div className="rounded-3xl border border-destructive/30 bg-card px-5 py-6 text-center shadow-sm">
+            <p className="text-base font-semibold text-foreground">Could not open room</p>
+            <p className="mt-1 text-sm text-muted-foreground">{loadError}</p>
           </div>
         </main>
       </div>
@@ -162,6 +232,26 @@ export function RoomPassengerSession({ roomCode }: RoomPassengerSessionProps) {
           estimatedShare={estimatedShare}
         />
         <AttendanceToggle joining={joining} onChange={setJoining} />
+        {saveStatus !== "idle" ? (
+          <section className="px-4 pt-4">
+            <div
+              className={`rounded-2xl border px-4 py-3 text-sm ${
+                saveStatus === "saved"
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+                  : "border-rose-200 bg-rose-50 text-rose-900"
+              }`}
+            >
+              <p className="font-semibold">
+                {saveStatus === "saved" ? "Location status saved" : "Could not save location status"}
+              </p>
+              <p className="mt-1 text-xs leading-relaxed opacity-90">
+                {saveStatus === "saved"
+                  ? "Your pickup point and joining status are now stored for this room. You can keep checking the map or edit it again."
+                  : saveError || "Please check your connection and try again."}
+              </p>
+            </div>
+          </section>
+        ) : null}
         <div className="h-4" />
       </main>
 
@@ -173,7 +263,7 @@ export function RoomPassengerSession({ roomCode }: RoomPassengerSessionProps) {
           className="flex w-full items-center justify-center gap-2 rounded-2xl bg-primary py-4 text-base font-bold text-primary-foreground shadow-lg shadow-primary/25 transition-transform active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70"
         >
           <MapPin className="size-5" />
-          {saving ? "Saving..." : "Save My Location Status"}
+          {saving ? "Saving..." : saveStatus === "saved" ? "Saved" : "Save My Location Status"}
         </button>
       </footer>
     </div>

@@ -7,6 +7,7 @@ export default async function DriverRoomPage({
   params: Promise<{ code: string }>
 }) {
   const { code } = await params
+
   return (
     <RoomProvider initialRoomCode={code}>
       <DriverDashboardShell />

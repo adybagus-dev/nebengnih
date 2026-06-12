@@ -57,20 +57,15 @@ export function PickupMapPreview({
   const onLandmarkChangeRef = useRef(onLandmarkChange)
   const manualChangeRef = useRef(false)
   const locationRequestedRef = useRef(false)
-  const [mounted, setMounted] = useState(false)
-  const [coordinates, setCoordinates] = useState(
-    initialCoordinates ?? { lat: PIN_COORDS[0], lng: PIN_COORDS[1] }
-  )
+  const initialPosition = initialCoordinates ?? { lat: PIN_COORDS[0], lng: PIN_COORDS[1] }
+  const initialPositionRef = useRef(initialPosition)
+  const [coordinates, setCoordinates] = useState(initialPosition)
   const [geoStatus, setGeoStatus] = useState<"idle" | "loading" | "ready" | "denied" | "unsupported">("idle")
   const [geoMessage, setGeoMessage] = useState("")
   const [searchText, setSearchText] = useState(landmark)
   const [searchResults, setSearchResults] = useState<SearchResult[]>([])
   const [searching, setSearching] = useState(false)
   const [searchError, setSearchError] = useState("")
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
 
   useEffect(() => {
     onCoordinatesChangeRef.current = onCoordinatesChange
@@ -85,8 +80,6 @@ export function PickupMapPreview({
   }, [landmark])
 
   useEffect(() => {
-    if (!mounted) return
-    if (typeof window === "undefined") return
     if (!enableCurrentLocation) {
       setGeoStatus("idle")
       setGeoMessage("")
@@ -139,15 +132,19 @@ export function PickupMapPreview({
         maximumAge: 60000,
       }
     )
-  }, [enableCurrentLocation, initialCoordinates, landmark, mounted])
+  }, [enableCurrentLocation, initialCoordinates, landmark])
 
   useEffect(() => {
-    if (!mounted) return
-    if (typeof window === "undefined") return
     if (mapInstanceRef.current) return
+    let cancelled = false
 
     import("leaflet").then((L) => {
-      if (!mapRef.current) return
+      if (cancelled || !mapRef.current) return
+
+      const container = mapRef.current as HTMLDivElement & { _leaflet_id?: string }
+      if (container._leaflet_id) {
+        delete container._leaflet_id
+      }
 
       // Fix default icon paths for Next.js
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -234,7 +231,8 @@ export function PickupMapPreview({
         }
       }
 
-      const pinMarker = L.marker([coordinates.lat, coordinates.lng], {
+      const initialPosition = initialPositionRef.current
+      const pinMarker = L.marker([initialPosition.lat, initialPosition.lng], {
         icon: makePinIcon(),
         draggable: true,
       }).addTo(map)
@@ -242,7 +240,11 @@ export function PickupMapPreview({
       mapInstanceRef.current = map
 
       requestAnimationFrame(() => {
-        setTimeout(() => map.invalidateSize(), 150)
+        if (!cancelled) {
+          setTimeout(() => {
+            if (!cancelled) map.invalidateSize()
+          }, 150)
+        }
       })
 
       map.on("click", async (e) => {
@@ -256,30 +258,29 @@ export function PickupMapPreview({
     })
 
     return () => {
+      cancelled = true
       mapInstanceRef.current?.remove()
       mapInstanceRef.current = null
       pinMarkerRef.current = null
     }
-  }, [mounted])
+  }, [])
 
   useEffect(() => {
-    if (!mounted) return
     if (!initialCoordinates) return
 
     setCoordinates(initialCoordinates)
     pinMarkerRef.current?.setLatLng([initialCoordinates.lat, initialCoordinates.lng])
     mapInstanceRef.current?.panTo([initialCoordinates.lat, initialCoordinates.lng])
-  }, [initialCoordinates, mounted])
+  }, [initialCoordinates])
 
   useEffect(() => {
-    if (!mounted) return
     const map = mapInstanceRef.current
     const pinMarker = pinMarkerRef.current
     if (!map || !pinMarker) return
 
     pinMarker.setLatLng([coordinates.lat, coordinates.lng])
     map.panTo([coordinates.lat, coordinates.lng])
-  }, [coordinates, mounted])
+  }, [coordinates])
 
   async function handleSearch() {
     const query = searchText.trim()

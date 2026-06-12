@@ -1,43 +1,42 @@
 import { createClient } from "@supabase/supabase-js"
-import { createDefaultRoomState } from "./defaults"
+import { normalizeRoomState } from "./state"
 import { getRoomStorageKey, loadRoomState, saveRoomState } from "./storage"
 import type { RoomState } from "./types"
 
 type RoomRecord = {
   code: string
   payload: RoomState
-  updated_at?: string
 }
 
-function getSupabaseClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  if (!url || !anonKey) return null
-  return createClient(url, anonKey)
+type RoomExistenceRecord = {
+  code: string
 }
 
-export function hasSupabaseConfig() {
-  return Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
-}
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+const supabaseClient =
+  supabaseUrl && supabaseAnonKey ? createClient(supabaseUrl, supabaseAnonKey) : null
 
 export async function fetchRoom(roomCode: string): Promise<RoomState> {
   const normalizedCode = roomCode.toUpperCase()
-  const supabase = getSupabaseClient()
+  const supabase = supabaseClient
 
   if (supabase) {
     const { data, error } = await supabase
       .from("rooms")
-      .select("code,payload,updated_at")
+      .select("code,payload")
       .eq("code", normalizedCode)
       .maybeSingle<RoomRecord>()
 
-    if (!error && data?.payload) {
-      return {
-        ...createDefaultRoomState(normalizedCode),
-        ...data.payload,
-        roomCode: normalizedCode,
-      }
+    if (error) {
+      throw new Error(`Unable to load room ${normalizedCode}: ${error.message}`)
     }
+
+    if (data?.payload) {
+      return normalizeRoomState(normalizedCode, data.payload)
+    }
+
+    throw new Error(`Room ${normalizedCode} not found`)
   }
 
   if (typeof window !== "undefined") {
@@ -45,65 +44,61 @@ export async function fetchRoom(roomCode: string): Promise<RoomState> {
     if (local) return local
   }
 
-  return createDefaultRoomState(normalizedCode)
+  throw new Error(`Room ${normalizedCode} not found`)
+}
+
+export async function roomExists(roomCode: string): Promise<boolean> {
+  const normalizedCode = roomCode.toUpperCase()
+  const supabase = supabaseClient
+
+  if (supabase) {
+    const { data, error } = await supabase
+      .from("rooms")
+      .select("code")
+      .eq("code", normalizedCode)
+      .maybeSingle<RoomExistenceRecord>()
+
+    if (error) {
+      throw new Error(`Unable to check room ${normalizedCode}: ${error.message}`)
+    }
+
+    return Boolean(data?.code)
+  }
+
+  if (typeof window !== "undefined") {
+    return Boolean(window.localStorage.getItem(getRoomStorageKey(normalizedCode)))
+  }
+
+  return false
 }
 
 export async function persistRoom(
   room: RoomState,
   options?: { trackAsDriver?: boolean }
 ): Promise<RoomState> {
+  const supabase = supabaseClient
+  if (!supabase) {
+    saveRoomState(room, options)
+    return room
+  }
+
+  const response = await fetch("/api/driver-rooms", {
+    method: "POST",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      roomCode: room.roomCode.toUpperCase(),
+      payload: room,
+    }),
+  })
+
+  if (!response.ok) {
+    const body = (await response.json().catch(() => null)) as { error?: string } | null
+    throw new Error(body?.error ?? `Unable to save room ${room.roomCode}`)
+  }
+
   saveRoomState(room, options)
-
-  const supabase = getSupabaseClient()
-  if (!supabase) return room
-
-  const record: RoomRecord = {
-    code: room.roomCode.toUpperCase(),
-    payload: room,
-    updated_at: new Date().toISOString(),
-  }
-
-  await supabase.from("rooms").upsert(record, { onConflict: "code" })
   return room
-}
-
-export function subscribeToRoom(roomCode: string, onRoom: (room: RoomState) => void) {
-  const supabase = getSupabaseClient()
-  if (!supabase || typeof window === "undefined") return () => {}
-
-  const normalizedCode = roomCode.toUpperCase()
-  const channel = supabase
-    .channel(`room:${normalizedCode}`)
-    .on(
-      "postgres_changes",
-      {
-        event: "*",
-        schema: "public",
-        table: "rooms",
-        filter: `code=eq.${normalizedCode}`,
-      },
-      async () => {
-        const nextRoom = await fetchRoom(normalizedCode)
-        onRoom(nextRoom)
-      }
-    )
-    .subscribe()
-
-  return () => {
-    void supabase.removeChannel(channel)
-  }
-}
-
-export async function ensureRoom(roomCode: string): Promise<RoomState> {
-  const existing = await fetchRoom(roomCode)
-  await persistRoom(existing)
-  return existing
-}
-
-export function roomShareUrl(roomCode: string) {
-  return `https://nebengnih.app/room/${roomCode.toUpperCase()}`
-}
-
-export function getRoomStorageSlot(roomCode: string) {
-  return getRoomStorageKey(roomCode)
 }

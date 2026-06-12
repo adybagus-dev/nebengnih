@@ -17,7 +17,7 @@ export function RideStats() {
       <div className="grid grid-cols-2 gap-2.5">
         <StatCard
           icon={<Route className="size-4 text-primary" />}
-          title="Total Distance"
+          title="Distance"
           rows={[
             { label: "Base", value: `${summary.baseDistanceKm.toFixed(1)} km` },
             { label: "Actual", value: `${summary.actualDistanceKm.toFixed(1)} km` },
@@ -25,27 +25,24 @@ export function RideStats() {
         />
         <StatCard
           icon={<Gauge className="size-4 text-accent" />}
-          title="Inputs Preview"
+          title="Cost"
           rows={[
-            { label: "Fuel", value: `${room.settings.fuelEfficiencyKmPerLiter.toFixed(1)} km/L` },
+            { label: "Fuel rate", value: `${room.settings.fuelEfficiencyKmPerLiter.toFixed(1)} km/L` },
             { label: "Tolls", value: formatMoney(summary.tollCost) },
+            { label: "Driver share", value: formatMoney(summary.driverShare) },
           ]}
         />
       </div>
-        <div className="mt-2.5 rounded-2xl border border-border bg-card p-3.5">
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-xs font-semibold text-muted-foreground">Active passengers</span>
-            <span className="font-mono text-xs font-semibold text-foreground">{summary.activePassengers.length}</span>
-          </div>
-          <div className="mt-2 flex items-center justify-between gap-2">
-            <span className="text-xs font-semibold text-muted-foreground">Route sync</span>
-            <span className="font-mono text-xs font-semibold text-foreground">{routeStatusLabel}</span>
-          </div>
-          <div className="mt-2 flex items-center justify-between gap-2">
-            <span className="text-xs font-semibold text-muted-foreground">Driver share</span>
-            <span className="font-mono text-xs font-semibold text-foreground">{formatMoney(summary.driverShare)}</span>
-          </div>
+      <div className="mt-2.5 rounded-2xl border border-border bg-card p-3.5">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-xs font-semibold text-muted-foreground">Active passengers</span>
+          <span className="font-mono text-xs font-semibold text-foreground">{summary.activePassengers.length}</span>
         </div>
+        <div className="mt-2 flex items-center justify-between gap-2">
+          <span className="text-xs font-semibold text-muted-foreground">Route status</span>
+          <span className="font-mono text-xs font-semibold text-foreground">{routeStatusLabel}</span>
+        </div>
+      </div>
     </section>
   )
 }

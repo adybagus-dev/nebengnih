@@ -2,14 +2,30 @@
 
 import { useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { loadStoredActiveRoomCode } from "@/lib/room/storage"
+import { listDriverRooms } from "@/lib/driver-session"
 
 export default function DriverRedirectPage() {
   const router = useRouter()
 
   useEffect(() => {
-    const roomCode = loadStoredActiveRoomCode()
-    router.replace(roomCode ? `/driver/${roomCode}` : "/")
+    let cancelled = false
+
+    async function load() {
+      try {
+        const result = await listDriverRooms()
+        if (cancelled) return
+
+        router.replace(result.activeRoomCode ? `/driver/${result.activeRoomCode}` : "/")
+      } catch {
+        if (!cancelled) router.replace("/")
+      }
+    }
+
+    void load()
+
+    return () => {
+      cancelled = true
+    }
   }, [router])
 
   return (

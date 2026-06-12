@@ -1,5 +1,7 @@
+"use client"
+
 import Link from "next/link"
-import { ArrowLeft, Home } from "lucide-react"
+import { ArrowLeft, Home, RefreshCcw } from "lucide-react"
 import { NebengNihLogo } from "@/components/nebengnih-logo"
 
 interface AppHeaderProps {
@@ -9,6 +11,7 @@ interface AppHeaderProps {
   roomCode?: string
   statusLabel?: string
   live?: boolean
+  onRefresh?: () => void
 }
 
 export function AppHeader({
@@ -18,6 +21,7 @@ export function AppHeader({
   roomCode,
   statusLabel,
   live = false,
+  onRefresh,
 }: AppHeaderProps) {
   const taskHeader = Boolean(title && backHref)
 
@@ -67,26 +71,39 @@ export function AppHeader({
           </Link>
 
           {roomCode ? (
-            <div className="flex h-10 flex-col items-end justify-center">
-              <div className="flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-1.5">
-                {live ? (
-                  <span className="relative flex size-2">
-                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
-                    <span className="relative inline-flex size-2 rounded-full bg-primary" />
+            <div className="flex items-center gap-2">
+              <div className="flex h-10 flex-col items-end justify-center">
+                <div className="flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-1.5">
+                  {live ? (
+                    <span className="relative flex size-2">
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
+                      <span className="relative inline-flex size-2 rounded-full bg-primary" />
+                    </span>
+                  ) : null}
+                  <span className="font-mono text-xs font-bold tracking-wide text-primary">
+                    {roomCode}
                   </span>
-                ) : null}
-                <span className="font-mono text-xs font-bold tracking-wide text-primary">
-                  {roomCode}
+                </div>
+                <span
+                  className={`mt-0.5 min-h-3 text-[10px] font-semibold uppercase tracking-[0.18em] ${
+                    statusLabel ? "text-muted-foreground" : "text-transparent"
+                  }`}
+                  aria-hidden={statusLabel ? undefined : true}
+                >
+                  {statusLabel ?? "STATUS"}
                 </span>
               </div>
-              <span
-                className={`mt-0.5 min-h-3 text-[10px] font-semibold uppercase tracking-[0.18em] ${
-                  statusLabel ? "text-muted-foreground" : "text-transparent"
-                }`}
-                aria-hidden={statusLabel ? undefined : true}
-              >
-                {statusLabel ?? "STATUS"}
-              </span>
+
+              {onRefresh ? (
+                <button
+                  type="button"
+                  onClick={onRefresh}
+                  className="flex size-9 items-center justify-center rounded-xl border border-border bg-card text-muted-foreground transition-colors hover:text-primary active:scale-95"
+                  aria-label="Refresh room data"
+                >
+                  <RefreshCcw className="size-[18px]" />
+                </button>
+              ) : null}
             </div>
           ) : (
             <span className="h-10" aria-hidden="true" />

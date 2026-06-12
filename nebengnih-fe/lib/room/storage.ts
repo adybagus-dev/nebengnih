@@ -4,6 +4,7 @@ import {
   DRIVER_ROOM_HISTORY_KEY,
   ROOM_STORAGE_KEY,
 } from "./defaults"
+import { normalizeRoomState } from "./state"
 import type { RoomState } from "./types"
 
 export type DriverRoomHistoryEntry = {
@@ -23,6 +24,10 @@ export function getRoomStorageKey(roomCode: string) {
 export function loadStoredActiveRoomCode() {
   if (typeof window === "undefined") return null
   return window.localStorage.getItem(ACTIVE_ROOM_CODE_KEY)
+}
+
+export function hasStoredActiveRoomCode() {
+  return Boolean(loadStoredActiveRoomCode())
 }
 
 export function loadActiveRoomCode() {
@@ -131,32 +136,7 @@ export function loadRoomState(roomCode: string): RoomState {
     if (!raw) return createDefaultRoomState(normalizedCode)
 
     const parsed = JSON.parse(raw) as Partial<RoomState>
-    return {
-      ...createDefaultRoomState(normalizedCode),
-      ...parsed,
-      settings: {
-        ...createDefaultRoomState(normalizedCode).settings,
-        ...(parsed.settings ?? {}),
-      },
-      passengers: Array.isArray(parsed.passengers)
-        ? parsed.passengers.map((passenger) => ({
-            ...passenger,
-            pickupLat: typeof passenger.pickupLat === "number" ? passenger.pickupLat : undefined,
-            pickupLng: typeof passenger.pickupLng === "number" ? passenger.pickupLng : undefined,
-            detourKm: Number(passenger.detourKm) || 0,
-            joiningToday: Boolean(passenger.joiningToday),
-          }))
-        : createDefaultRoomState(normalizedCode).passengers,
-      routeMetrics: parsed.routeMetrics
-        ? {
-            routeStatus: parsed.routeMetrics.routeStatus ?? "idle",
-            baseDistanceKm: parsed.routeMetrics.baseDistanceKm,
-            actualDistanceKm: parsed.routeMetrics.actualDistanceKm,
-            detourDistanceKm: parsed.routeMetrics.detourDistanceKm,
-            updatedAt: parsed.routeMetrics.updatedAt,
-          }
-        : { routeStatus: "idle" },
-    }
+    return normalizeRoomState(normalizedCode, parsed)
   } catch {
     return createDefaultRoomState(normalizedCode)
   }

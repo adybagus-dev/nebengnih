@@ -1,37 +1,69 @@
 create extension if not exists pgcrypto;
 
-create table if not exists public.rooms (
+create table if not exists public.driver_sessions (
   id uuid primary key default gen_random_uuid(),
-  room_code text not null unique,
-  admin_token_hash text,
-  driver_alias text not null default 'Driver',
-  origin_lat double precision,
-  origin_lng double precision,
-  destination_lat double precision,
-  destination_lng double precision,
-  fuel_cost_per_km integer not null default 0,
-  toll_cost integer not null default 0,
-  payload jsonb not null default '{}'::jsonb,
+  session_token_hash text not null unique,
+  last_active_room_code text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 
-create table if not exists public.passengers (
-  id uuid primary key default gen_random_uuid(),
-  room_id uuid not null references public.rooms(id) on delete cascade,
-  alias text not null,
-  pickup_lat double precision,
-  pickup_lng double precision,
-  is_joining_today boolean not null default true,
-  pickup_order integer not null default 0,
-  local_member_token_hash text,
+create table if not exists public.rooms (
+  code text primary key check (code ~ '^BGR-[A-HJ-NP-Z2-9]{3}$'),
+  driver_session_id uuid references public.driver_sessions(id) on delete cascade,
+  payload jsonb not null check (jsonb_typeof(payload) = 'object'),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.rooms
+  add column if not exists driver_session_id uuid;
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'rooms_driver_session_id_fkey'
+  ) then
+    alter table public.rooms
+      add constraint rooms_driver_session_id_fkey
+      foreign key (driver_session_id)
+      references public.driver_sessions(id)
+      on delete cascade;
+  end if;
+end;
+$$;
+
+do $$
+declare
+  fallback_session_id uuid;
+begin
+  select id
+    into fallback_session_id
+  from public.driver_sessions
+  order by created_at asc
+  limit 1;
+
+  if fallback_session_id is null then
+    insert into public.driver_sessions (session_token_hash, last_active_room_code)
+    values ('legacy-room-migration', null)
+    returning id into fallback_session_id;
+  end if;
+
+  update public.rooms
+  set driver_session_id = fallback_session_id
+  where driver_session_id is null;
+end;
+$$;
+
+alter table public.rooms
+  alter column driver_session_id set not null;
 
 create or replace function public.set_updated_at()
 returns trigger
 language plpgsql
+set search_path = ''
 as $$
 begin
   new.updated_at = now();
@@ -39,35 +71,64 @@ begin
 end;
 $$;
 
+drop trigger if exists driver_sessions_set_updated_at on public.driver_sessions;
+create trigger driver_sessions_set_updated_at
+before update on public.driver_sessions
+for each row execute function public.set_updated_at();
+
 drop trigger if exists rooms_set_updated_at on public.rooms;
 create trigger rooms_set_updated_at
 before update on public.rooms
 for each row execute function public.set_updated_at();
 
-drop trigger if exists passengers_set_updated_at on public.passengers;
-create trigger passengers_set_updated_at
-before update on public.passengers
-for each row execute function public.set_updated_at();
-
+alter table public.driver_sessions enable row level security;
 alter table public.rooms enable row level security;
-alter table public.passengers enable row level security;
+
+grant usage on schema public to anon, authenticated;
+grant select, insert, update, delete on table public.driver_sessions to anon, authenticated;
+grant select, insert, update on table public.rooms to anon, authenticated;
+
+drop policy if exists "driver_sessions_public_read" on public.driver_sessions;
+create policy "driver_sessions_public_read"
+  on public.driver_sessions
+  for select
+  to anon, authenticated
+  using (true);
+
+drop policy if exists "driver_sessions_public_insert" on public.driver_sessions;
+create policy "driver_sessions_public_insert"
+  on public.driver_sessions
+  for insert
+  to anon, authenticated
+  with check (true);
+
+drop policy if exists "driver_sessions_public_update" on public.driver_sessions;
+create policy "driver_sessions_public_update"
+  on public.driver_sessions
+  for update
+  to anon, authenticated
+  using (true)
+  with check (true);
 
 drop policy if exists "rooms_public_read" on public.rooms;
 create policy "rooms_public_read"
   on public.rooms
   for select
+  to anon, authenticated
   using (true);
 
 drop policy if exists "rooms_public_insert" on public.rooms;
 create policy "rooms_public_insert"
   on public.rooms
   for insert
+  to anon, authenticated
   with check (true);
 
 drop policy if exists "rooms_public_update" on public.rooms;
 create policy "rooms_public_update"
   on public.rooms
   for update
+  to anon, authenticated
   using (true)
   with check (true);
 
@@ -75,30 +136,19 @@ drop policy if exists "rooms_public_delete" on public.rooms;
 create policy "rooms_public_delete"
   on public.rooms
   for delete
+  to anon, authenticated
   using (true);
 
-drop policy if exists "passengers_public_read" on public.passengers;
-create policy "passengers_public_read"
-  on public.passengers
-  for select
-  using (true);
-
-drop policy if exists "passengers_public_insert" on public.passengers;
-create policy "passengers_public_insert"
-  on public.passengers
-  for insert
-  with check (true);
-
-drop policy if exists "passengers_public_update" on public.passengers;
-create policy "passengers_public_update"
-  on public.passengers
-  for update
-  using (true)
-  with check (true);
-
-drop policy if exists "passengers_public_delete" on public.passengers;
-create policy "passengers_public_delete"
-  on public.passengers
-  for delete
-  using (true);
-
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public'
+      and tablename = 'rooms'
+  ) then
+    alter publication supabase_realtime add table public.rooms;
+  end if;
+end;
+$$;

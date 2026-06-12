@@ -4,12 +4,7 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState } from 
 import type { ReactNode } from "react"
 import { DEFAULT_ROOM_STATE } from "@/lib/room/defaults"
 import { generateRoomCode, calculateRoomSummary } from "@/lib/room/calculations"
-import {
-  loadDriverRoomHistory,
-  loadStoredActiveRoomCode,
-  saveActiveRoomCode,
-} from "@/lib/room/storage"
-import { fetchRoom, persistRoom, subscribeToRoom } from "@/lib/room/repository"
+import { fetchRoom, persistRoom } from "@/lib/room/repository"
 import type { Passenger, RoomState, RoomSummary, RouteMetrics, RouteSettings } from "@/lib/room/types"
 
 type RoomAction =
@@ -42,9 +37,27 @@ type RoomContextValue = {
   upsertPassenger: (passenger: Passenger) => void
   movePassenger: (id: string, direction: "up" | "down") => void
   removePassenger: (id: string) => void
+  refreshRoom: () => Promise<void>
 }
 
 const RoomContext = createContext<RoomContextValue | null>(null)
+
+function roomSignature(room: RoomState) {
+  return JSON.stringify({
+    roomCode: room.roomCode,
+    driverNickname: room.driverNickname,
+    settings: room.settings,
+    passengers: room.passengers,
+    routeMetrics: room.routeMetrics
+      ? {
+          routeStatus: room.routeMetrics.routeStatus,
+          baseDistanceKm: room.routeMetrics.baseDistanceKm,
+          actualDistanceKm: room.routeMetrics.actualDistanceKm,
+          detourDistanceKm: room.routeMetrics.detourDistanceKm,
+        }
+      : null,
+  })
+}
 
 function roomReducer(state: RoomState, action: RoomAction): RoomState {
   switch (action.type) {
@@ -158,31 +171,39 @@ export function RoomProvider({
     roomCode: (initialRoomCode ?? DEFAULT_ROOM_STATE.roomCode).toUpperCase(),
   }))
   const [hydrated, setHydrated] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
   const skipNextPersistRef = useRef(false)
   const trackAsDriverRef = useRef(Boolean(initialRoomCode))
   const userActionRef = useRef(false)
+  const roomSignatureRef = useRef(roomSignature({
+    ...DEFAULT_ROOM_STATE,
+    roomCode: (initialRoomCode ?? DEFAULT_ROOM_STATE.roomCode).toUpperCase(),
+  }))
 
   useEffect(() => {
-    const storedRoomCode = loadStoredActiveRoomCode()
-    const storedRoomIsDriver = storedRoomCode
-      ? loadDriverRoomHistory().some(
-          (entry) => entry.roomCode === storedRoomCode.toUpperCase()
-        )
-      : false
-    const roomCode = (
-      initialRoomCode ??
-      (storedRoomIsDriver ? storedRoomCode : null) ??
-      DEFAULT_ROOM_STATE.roomCode
-    ).toUpperCase()
-    trackAsDriverRef.current = Boolean(initialRoomCode || storedRoomIsDriver)
+    const roomCode = (initialRoomCode ?? "").toUpperCase()
+    trackAsDriverRef.current = Boolean(initialRoomCode)
+    if (!roomCode) {
+      setHydrated(true)
+      return
+    }
+
     let cancelled = false
 
     async function load() {
-      const nextRoom = await fetchRoom(roomCode)
-      if (cancelled || userActionRef.current) return
+      try {
+        const nextRoom = await fetchRoom(roomCode)
+        if (cancelled || userActionRef.current) return
 
-      setRoom(nextRoom)
-      setHydrated(true)
+        roomSignatureRef.current = roomSignature(nextRoom)
+        setRoom(nextRoom)
+        setHydrated(true)
+      } catch (error) {
+        console.error(error)
+        if (!cancelled) {
+          setHydrated(true)
+        }
+      }
     }
 
     void load()
@@ -194,23 +215,18 @@ export function RoomProvider({
 
   useEffect(() => {
     if (!hydrated) return
+    if (!room.roomCode) return
     if (skipNextPersistRef.current) {
       skipNextPersistRef.current = false
       return
     }
 
-    void persistRoom(room, { trackAsDriver: trackAsDriverRef.current })
+    const nextSignature = roomSignature(room)
+    if (roomSignatureRef.current === nextSignature) return
+    roomSignatureRef.current = nextSignature
+
+    void persistRoom(room, { trackAsDriver: trackAsDriverRef.current }).catch(console.error)
   }, [hydrated, room])
-
-  useEffect(() => {
-    if (!hydrated) return
-    if (!room.roomCode) return
-
-    return subscribeToRoom(room.roomCode, (nextRoom) => {
-      skipNextPersistRef.current = true
-      setRoom(nextRoom)
-    })
-  }, [hydrated, room.roomCode])
 
   const summary = useMemo(() => calculateRoomSummary(room), [room])
 
@@ -226,7 +242,6 @@ export function RoomProvider({
         const roomCode = generateRoomCode()
         userActionRef.current = true
         trackAsDriverRef.current = true
-        saveActiveRoomCode(roomCode)
         setHydrated(true)
         dispatch({ type: "create-room", roomCode })
         return roomCode
@@ -257,8 +272,21 @@ export function RoomProvider({
       movePassenger: (id: string, direction: "up" | "down") =>
         dispatch({ type: "move-passenger", id, direction }),
       removePassenger: (id: string) => dispatch({ type: "remove-passenger", id }),
+      refreshRoom: async () => {
+        if (!room.roomCode || refreshing) return
+
+        setRefreshing(true)
+        try {
+          const nextRoom = await fetchRoom(room.roomCode)
+          roomSignatureRef.current = roomSignature(nextRoom)
+          skipNextPersistRef.current = true
+          setRoom(nextRoom)
+        } finally {
+          setRefreshing(false)
+        }
+      },
     }),
-    [room, summary]
+    [room, summary, refreshing]
   )
 
   return <RoomContext.Provider value={value}>{children}</RoomContext.Provider>

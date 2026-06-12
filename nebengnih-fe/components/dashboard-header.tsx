@@ -4,7 +4,7 @@ import { AppHeader } from "@/components/app-header"
 import { useRoom } from "@/components/providers/room-provider"
 
 export function DashboardHeader() {
-  const { summary } = useRoom()
+  const { summary, refreshRoom } = useRoom()
 
   return (
     <AppHeader
@@ -12,6 +12,9 @@ export function DashboardHeader() {
       backHref="/"
       backLabel="Back"
       roomCode={summary.roomCode}
+      onRefresh={() => {
+        void refreshRoom()
+      }}
     />
   )
 }

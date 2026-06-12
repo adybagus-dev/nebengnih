@@ -4,48 +4,54 @@ import { useEffect, useState } from "react"
 import { ArrowRight, Car, History, Plus, Trash2, X } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useRoom } from "@/components/providers/room-provider"
-import { persistRoom } from "@/lib/room/repository"
-import {
-  loadDriverRoomHistory,
-  loadStoredActiveRoomCode,
-  removeDriverRoomFromDevice,
-  saveActiveRoomCode,
-  subscribeToDriverRoomHistory,
-  type DriverRoomHistoryEntry,
-} from "@/lib/room/storage"
+import { getDriverSession, listDriverRooms, saveDriverRoomPointer } from "@/lib/driver-session"
+import type { DriverRoomHistoryEntry } from "@/lib/room/storage"
 
 export function DriverEntryCard() {
   const router = useRouter()
-  const { room, createRoom } = useRoom()
+  const { createRoom } = useRoom()
   const [history, setHistory] = useState<DriverRoomHistoryEntry[]>([])
   const [activeRoomCode, setActiveRoomCode] = useState<string | null>(null)
   const [createConfirmOpen, setCreateConfirmOpen] = useState(false)
   const [removeTarget, setRemoveTarget] = useState<DriverRoomHistoryEntry | null>(null)
 
   useEffect(() => {
-    function refreshRooms() {
-      setHistory(loadDriverRoomHistory())
-      setActiveRoomCode(loadStoredActiveRoomCode()?.toUpperCase() ?? null)
+    let cancelled = false
+
+    async function refreshRooms() {
+      try {
+        await getDriverSession()
+        const result = await listDriverRooms()
+        if (cancelled) return
+
+        setHistory(result.rooms)
+        setActiveRoomCode(result.activeRoomCode)
+      } catch {
+        if (!cancelled) {
+          setHistory([])
+          setActiveRoomCode(null)
+        }
+      }
     }
 
-    refreshRooms()
-    return subscribeToDriverRoomHistory(refreshRooms)
+    void refreshRooms()
+
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   const activeRoom = history.find((entry) => entry.roomCode === activeRoomCode) ?? null
   const previousRooms = history.filter((entry) => entry.roomCode !== activeRoomCode)
 
   function openRoom(roomCode: string) {
-    saveActiveRoomCode(roomCode)
+    void saveDriverRoomPointer(roomCode)
     router.push(`/driver/${roomCode}`)
   }
 
   async function createNewRoom() {
-    if (activeRoom) {
-      await persistRoom(room, { trackAsDriver: true })
-    }
-
-    createRoom()
+    const roomCode = createRoom()
+    void saveDriverRoomPointer(roomCode)
     setCreateConfirmOpen(false)
     router.push("/driver/empty")
   }
@@ -61,7 +67,19 @@ export function DriverEntryCard() {
 
   function handleRemoveRoom() {
     if (!removeTarget) return
-    removeDriverRoomFromDevice(removeTarget.roomCode)
+    void fetch("/api/driver-rooms", {
+      method: "DELETE",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ roomCode: removeTarget.roomCode }),
+    }).then(() => {
+      void listDriverRooms().then((result) => {
+        setHistory(result.rooms)
+        setActiveRoomCode(result.activeRoomCode)
+      })
+    })
     setRemoveTarget(null)
   }
 
