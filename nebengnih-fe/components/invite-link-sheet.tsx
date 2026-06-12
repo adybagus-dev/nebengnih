@@ -4,6 +4,7 @@ import { Check, Link2, X } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { useRoom } from "@/components/providers/room-provider"
+import { formatMoney } from "@/lib/room/calculations"
 import { useState } from "react"
 
 interface InviteLinkSheetProps {
@@ -69,7 +70,9 @@ export function InviteLinkSheet({ open, onOpenChange }: InviteLinkSheetProps) {
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   Driver share
                 </p>
-                <p className="font-mono text-sm font-semibold text-foreground">{summary.driverShare.toLocaleString("id-ID")}</p>
+                <p className="font-mono text-sm font-semibold text-foreground">
+                  {formatMoney(summary.driverShare)}
+                </p>
               </div>
             </div>
           </div>
