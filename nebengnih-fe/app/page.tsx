@@ -8,7 +8,7 @@ export default function LandingPage() {
     <div className="relative mx-auto flex min-h-screen w-full max-w-md flex-col bg-background">
       <LandingNavbar />
 
-      <main className="flex flex-1 flex-col justify-center px-5 pb-20 pt-6">
+      <main className="flex flex-1 flex-col px-5 pb-24 pt-6">
         {/* Hero */}
         <section className="mb-8 text-center" aria-label="Hero">
           <h1 className="text-balance text-[1.65rem] font-extrabold leading-tight tracking-tight text-foreground">

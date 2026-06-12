@@ -13,7 +13,7 @@ export function PassengerEntryCard() {
   function handleJoin() {
     if (code.trim()) {
       joinRoom(code.trim())
-      router.push("/passenger")
+      router.push(`/room/${code.trim().toUpperCase()}`)
     }
   }
 

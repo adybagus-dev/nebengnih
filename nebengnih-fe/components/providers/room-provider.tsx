@@ -1,15 +1,20 @@
 "use client"
 
-import { createContext, useContext, useEffect, useMemo, useState } from "react"
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react"
 import type { ReactNode } from "react"
 import { DEFAULT_ROOM_STATE } from "@/lib/room/defaults"
 import { generateRoomCode, calculateRoomSummary } from "@/lib/room/calculations"
-import { loadRoomState, saveRoomState } from "@/lib/room/storage"
-import type { Passenger, RoomState, RoomSummary, RouteSettings } from "@/lib/room/types"
+import {
+  loadDriverRoomHistory,
+  loadStoredActiveRoomCode,
+  saveActiveRoomCode,
+} from "@/lib/room/storage"
+import { fetchRoom, persistRoom, subscribeToRoom } from "@/lib/room/repository"
+import type { Passenger, RoomState, RoomSummary, RouteMetrics, RouteSettings } from "@/lib/room/types"
 
 type RoomAction =
   | { type: "replace"; room: RoomState }
-  | { type: "create-room" }
+  | { type: "create-room"; roomCode: string }
   | { type: "join-room"; roomCode: string }
   | { type: "set-driver-nickname"; driverNickname: string }
   | { type: "update-settings"; settings: Partial<RouteSettings> }
@@ -17,6 +22,7 @@ type RoomAction =
   | { type: "set-passenger-landmark"; id: string; pickupLandmark: string }
   | { type: "set-passenger-detour"; id: string; detourKm: number }
   | { type: "set-passenger-joining"; id: string; joiningToday: boolean }
+  | { type: "set-route-metrics"; routeMetrics: RouteMetrics }
   | { type: "upsert-passenger"; passenger: Passenger }
   | { type: "move-passenger"; id: string; direction: "up" | "down" }
   | { type: "remove-passenger"; id: string }
@@ -24,7 +30,7 @@ type RoomAction =
 type RoomContextValue = {
   room: RoomState
   summary: RoomSummary
-  createRoom: () => void
+  createRoom: () => string
   joinRoom: (roomCode: string) => void
   setDriverNickname: (driverNickname: string) => void
   updateSettings: (settings: Partial<RouteSettings>) => void
@@ -32,6 +38,7 @@ type RoomContextValue = {
   setPassengerLandmark: (id: string, pickupLandmark: string) => void
   setPassengerDetour: (id: string, detourKm: number) => void
   setPassengerJoining: (id: string, joiningToday: boolean) => void
+  setRouteMetrics: (routeMetrics: RouteMetrics) => void
   upsertPassenger: (passenger: Passenger) => void
   movePassenger: (id: string, direction: "up" | "down") => void
   removePassenger: (id: string) => void
@@ -45,8 +52,8 @@ function roomReducer(state: RoomState, action: RoomAction): RoomState {
       return action.room
     case "create-room":
       return {
-        ...state,
-        roomCode: generateRoomCode(),
+        ...DEFAULT_ROOM_STATE,
+        roomCode: action.roomCode,
       }
     case "join-room":
       return {
@@ -94,6 +101,11 @@ function roomReducer(state: RoomState, action: RoomAction): RoomState {
           passenger.id === action.id ? { ...passenger, joiningToday: action.joiningToday } : passenger
         ),
       }
+    case "set-route-metrics":
+      return {
+        ...state,
+        routeMetrics: action.routeMetrics,
+      }
     case "upsert-passenger": {
       const index = state.passengers.findIndex((passenger) => passenger.id === action.passenger.id)
       if (index === -1) {
@@ -134,19 +146,71 @@ function roomReducer(state: RoomState, action: RoomAction): RoomState {
   }
 }
 
-export function RoomProvider({ children }: { children: ReactNode }) {
-  const [room, setRoom] = useState<RoomState>(DEFAULT_ROOM_STATE)
+export function RoomProvider({
+  children,
+  initialRoomCode,
+}: {
+  children: ReactNode
+  initialRoomCode?: string
+}) {
+  const [room, setRoom] = useState<RoomState>(() => ({
+    ...DEFAULT_ROOM_STATE,
+    roomCode: (initialRoomCode ?? DEFAULT_ROOM_STATE.roomCode).toUpperCase(),
+  }))
   const [hydrated, setHydrated] = useState(false)
+  const skipNextPersistRef = useRef(false)
+  const trackAsDriverRef = useRef(Boolean(initialRoomCode))
+  const userActionRef = useRef(false)
 
   useEffect(() => {
-    setRoom(loadRoomState())
-    setHydrated(true)
-  }, [])
+    const storedRoomCode = loadStoredActiveRoomCode()
+    const storedRoomIsDriver = storedRoomCode
+      ? loadDriverRoomHistory().some(
+          (entry) => entry.roomCode === storedRoomCode.toUpperCase()
+        )
+      : false
+    const roomCode = (
+      initialRoomCode ??
+      (storedRoomIsDriver ? storedRoomCode : null) ??
+      DEFAULT_ROOM_STATE.roomCode
+    ).toUpperCase()
+    trackAsDriverRef.current = Boolean(initialRoomCode || storedRoomIsDriver)
+    let cancelled = false
+
+    async function load() {
+      const nextRoom = await fetchRoom(roomCode)
+      if (cancelled || userActionRef.current) return
+
+      setRoom(nextRoom)
+      setHydrated(true)
+    }
+
+    void load()
+
+    return () => {
+      cancelled = true
+    }
+  }, [initialRoomCode])
 
   useEffect(() => {
     if (!hydrated) return
-    saveRoomState(room)
+    if (skipNextPersistRef.current) {
+      skipNextPersistRef.current = false
+      return
+    }
+
+    void persistRoom(room, { trackAsDriver: trackAsDriverRef.current })
   }, [hydrated, room])
+
+  useEffect(() => {
+    if (!hydrated) return
+    if (!room.roomCode) return
+
+    return subscribeToRoom(room.roomCode, (nextRoom) => {
+      skipNextPersistRef.current = true
+      setRoom(nextRoom)
+    })
+  }, [hydrated, room.roomCode])
 
   const summary = useMemo(() => calculateRoomSummary(room), [room])
 
@@ -158,8 +222,22 @@ export function RoomProvider({ children }: { children: ReactNode }) {
     () => ({
       room,
       summary,
-      createRoom: () => dispatch({ type: "create-room" }),
-      joinRoom: (roomCode: string) => dispatch({ type: "join-room", roomCode }),
+      createRoom: () => {
+        const roomCode = generateRoomCode()
+        userActionRef.current = true
+        trackAsDriverRef.current = true
+        saveActiveRoomCode(roomCode)
+        setHydrated(true)
+        dispatch({ type: "create-room", roomCode })
+        return roomCode
+      },
+      joinRoom: (roomCode: string) => {
+        userActionRef.current = true
+        trackAsDriverRef.current = false
+        skipNextPersistRef.current = true
+        setHydrated(true)
+        dispatch({ type: "join-room", roomCode })
+      },
       setDriverNickname: (driverNickname: string) =>
         dispatch({ type: "set-driver-nickname", driverNickname }),
       updateSettings: (settings: Partial<RouteSettings>) =>
@@ -172,6 +250,8 @@ export function RoomProvider({ children }: { children: ReactNode }) {
         dispatch({ type: "set-passenger-detour", id, detourKm }),
       setPassengerJoining: (id: string, joiningToday: boolean) =>
         dispatch({ type: "set-passenger-joining", id, joiningToday }),
+      setRouteMetrics: (routeMetrics: RouteMetrics) =>
+        dispatch({ type: "set-route-metrics", routeMetrics }),
       upsertPassenger: (passenger: Passenger) =>
         dispatch({ type: "upsert-passenger", passenger }),
       movePassenger: (id: string, direction: "up" | "down") =>

@@ -2,27 +2,30 @@
 
 import { useState } from "react"
 import { CheckSquare } from "lucide-react"
+import { useRouter } from "next/navigation"
 import { AppHeader } from "@/components/app-header"
 import { RouteSettingsCard } from "@/components/route-settings-card"
-import { InviteLinkSheet } from "@/components/invite-link-sheet"
 import { useRoom } from "@/components/providers/room-provider"
 import { persistRoom } from "@/lib/room/repository"
 
-export default function DriverEmptyStatePage() {
-  const [inviteOpen, setInviteOpen] = useState(false)
-  const [saving, setSaving] = useState(false)
+export function EditRouteSession() {
+  const router = useRouter()
   const { room } = useRoom()
+  const [saving, setSaving] = useState(false)
 
-  async function handleSaveRoute() {
+  async function handleSave() {
     setSaving(true)
     await persistRoom(room, { trackAsDriver: true })
-    setSaving(false)
-    setInviteOpen(true)
+    router.push(`/driver/${room.roomCode}`)
   }
 
   return (
     <div className="relative mx-auto flex min-h-screen w-full max-w-md flex-col bg-background">
-      <AppHeader title="Route Setup" backHref="/" backLabel="Cancel" />
+      <AppHeader
+        title="Edit Route & Costs"
+        backHref={`/driver/${room.roomCode}`}
+        backLabel="Dashboard"
+      />
 
       <main className="flex-1 pb-28">
         <RouteSettingsCard />
@@ -32,15 +35,13 @@ export default function DriverEmptyStatePage() {
         <button
           type="button"
           disabled={saving}
-          onClick={() => void handleSaveRoute()}
-          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-primary py-4 text-base font-bold text-primary-foreground shadow-lg shadow-primary/25 transition-transform active:scale-[0.98]"
+          onClick={() => void handleSave()}
+          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-primary py-4 text-base font-bold text-primary-foreground shadow-lg shadow-primary/25 transition-transform active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70"
         >
           <CheckSquare className="size-5" />
-          {saving ? "Saving Route..." : "Save Route & Invite"}
+          {saving ? "Saving Changes..." : "Save Route Changes"}
         </button>
       </footer>
-
-      <InviteLinkSheet open={inviteOpen} onOpenChange={setInviteOpen} />
     </div>
   )
 }

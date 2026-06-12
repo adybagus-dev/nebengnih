@@ -2,6 +2,8 @@ import { Analytics } from '@vercel/analytics/next'
 import type { Metadata, Viewport } from 'next'
 import type { ReactNode } from 'react'
 import { RoomProvider } from '@/components/providers/room-provider'
+import { PwaRegister } from '@/components/pwa-register'
+import 'leaflet/dist/leaflet.css'
 import './globals.css'
 
 export const viewport: Viewport = {
@@ -16,6 +18,7 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   title: 'NebengNih',
   description: 'Anonymous carpool coordination & cost splitting for daily rides.',
+  manifest: '/manifest.webmanifest',
   generator: 'v0.app',
   appleWebApp: {
     capable: true,
@@ -50,6 +53,7 @@ export default function RootLayout({
     <html lang="en">
       <body className="font-sans antialiased bg-background overscroll-none">
         <RoomProvider>{children}</RoomProvider>
+        <PwaRegister />
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>

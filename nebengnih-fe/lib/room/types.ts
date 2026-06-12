@@ -2,6 +2,8 @@ export type Passenger = {
   id: string
   name: string
   pickupLandmark: string
+  pickupLat?: number
+  pickupLng?: number
   detourKm: number
   joiningToday: boolean
 }
@@ -9,10 +11,22 @@ export type Passenger = {
 export type RouteSettings = {
   origin: string
   destination: string
+  originLat?: number
+  originLng?: number
+  destinationLat?: number
+  destinationLng?: number
   fuelEfficiencyKmPerLiter: number
   fuelPricePerLiter: number
   tollCost: number
   baseDistanceKm: number
+}
+
+export type RouteMetrics = {
+  routeStatus: "idle" | "loading" | "ready" | "fallback"
+  baseDistanceKm?: number
+  actualDistanceKm?: number
+  detourDistanceKm?: number
+  updatedAt?: string
 }
 
 export type RoomState = {
@@ -20,6 +34,7 @@ export type RoomState = {
   driverNickname: string
   settings: RouteSettings
   passengers: Passenger[]
+  routeMetrics?: RouteMetrics
 }
 
 export type PassengerBill = {

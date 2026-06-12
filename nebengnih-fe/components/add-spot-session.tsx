@@ -1,0 +1,87 @@
+"use client"
+
+import { useState } from "react"
+import { CheckSquare } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { AppHeader } from "@/components/app-header"
+import { PickupLocationPicker } from "@/components/pickup-location-picker"
+import { PickupMapPreview } from "@/components/pickup-map-preview"
+import { estimateDetourKm } from "@/lib/room/calculations"
+import { useRoom } from "@/components/providers/room-provider"
+
+export function AddSpotSession() {
+  const router = useRouter()
+  const { summary, upsertPassenger } = useRoom()
+  const [passengerName, setPassengerName] = useState("")
+  const [landmark, setLandmark] = useState("Current location")
+  const [pickupCoordinates, setPickupCoordinates] = useState({
+    lat: -6.5987,
+    lng: 106.799,
+  })
+
+  function handleConfirm() {
+    upsertPassenger({
+      id: `manual-${crypto.randomUUID()}`,
+      name: passengerName.trim() || "Guest",
+      pickupLandmark: landmark.trim() || "Nearby landmark",
+      pickupLat: pickupCoordinates.lat,
+      pickupLng: pickupCoordinates.lng,
+      detourKm: estimateDetourKm(landmark),
+      joiningToday: true,
+    })
+    router.push(`/driver/${summary.roomCode}`)
+  }
+
+  return (
+    <div className="relative mx-auto flex min-h-screen w-full max-w-md flex-col bg-background">
+      <AppHeader
+        title="Add Manual Spot"
+        backHref={`/driver/${summary.roomCode}`}
+        backLabel="Dashboard"
+      />
+
+      <main className="flex-1 pb-28">
+        <section className="px-4 pt-5">
+          <label htmlFor="passenger-name" className="mb-2 block text-base font-semibold text-foreground">
+            Passenger Name
+          </label>
+          <div className="rounded-xl border border-input bg-card px-4 py-3 transition-shadow focus-within:ring-2 focus-within:ring-ring">
+            <input
+              id="passenger-name"
+              type="text"
+              value={passengerName}
+              onChange={(e) => setPassengerName(e.target.value)}
+              placeholder="Enter your friend's name (e.g., Cici)"
+              className="w-full bg-transparent text-base font-medium text-foreground outline-none placeholder:text-muted-foreground"
+            />
+          </div>
+        </section>
+
+        <PickupMapPreview
+          landmark={landmark}
+          initialCoordinates={pickupCoordinates}
+          onCoordinatesChange={setPickupCoordinates}
+          onLandmarkChange={setLandmark}
+        />
+        <PickupLocationPicker
+          landmark={landmark}
+          estimatedDetourKm={estimateDetourKm(landmark)}
+          estimatedShare={0}
+        />
+
+        <div className="h-4" />
+      </main>
+
+      <footer className="fixed inset-x-0 bottom-0 z-20 mx-auto max-w-md border-t border-border bg-background/80 px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur-lg">
+        <button
+          type="button"
+          onClick={handleConfirm}
+          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-primary py-4 text-base font-bold text-primary-foreground shadow-lg shadow-primary/25 transition-transform active:scale-[0.98]"
+        >
+          <CheckSquare className="size-5" />
+          Confirm &amp; Add to Lineup
+        </button>
+      </footer>
+    </div>
+  )
+}

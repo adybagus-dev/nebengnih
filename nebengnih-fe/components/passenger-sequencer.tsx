@@ -5,11 +5,7 @@ import Link from "next/link"
 import { useRoom } from "@/components/providers/room-provider"
 import { formatMoney } from "@/lib/room/calculations"
 
-interface PassengerSequencerProps {
-  onSettingsClick?: () => void
-}
-
-export function PassengerSequencer({ onSettingsClick }: PassengerSequencerProps) {
+export function PassengerSequencer() {
   const { room, summary, movePassenger, setPassengerJoining } = useRoom()
 
   return (
@@ -19,14 +15,13 @@ export function PassengerSequencer({ onSettingsClick }: PassengerSequencerProps)
           <span aria-hidden="true">🗓️</span>
           Today&apos;s Lineup &amp; Cost Split
         </h2>
-        <button
-          type="button"
-          onClick={onSettingsClick}
+        <Link
+          href={`/driver/${room.roomCode}/edit`}
           className="flex shrink-0 items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-primary hover:text-primary active:scale-95"
         >
           <SlidersHorizontal className="size-3.5" />
           Edit Route &amp; Costs
-        </button>
+        </Link>
       </div>
 
       <ul className="flex flex-col gap-2.5">
@@ -57,7 +52,7 @@ export function PassengerSequencer({ onSettingsClick }: PassengerSequencerProps)
       </ul>
 
       <Link
-        href="/driver/add-spot"
+        href={`/driver/${room.roomCode}/add-spot`}
         className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-transparent py-3 text-sm font-medium text-muted-foreground transition-colors hover:border-primary hover:text-primary active:scale-[0.99]"
       >
         <Plus className="size-4" />

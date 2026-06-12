@@ -50,8 +50,9 @@ export function calculateRoomSummary(room: RoomState): RoomSummary {
       : 0
 
   const detourDistanceKm = activePassengers.reduce((total, passenger) => total + passenger.detourKm, 0)
-  const actualDistanceKm = room.settings.baseDistanceKm + detourDistanceKm
-  const baseTripCost = room.settings.baseDistanceKm * fuelCostPerKm
+  const actualDistanceKm = room.routeMetrics?.actualDistanceKm ?? room.settings.baseDistanceKm + detourDistanceKm
+  const baseDistanceKm = room.routeMetrics?.baseDistanceKm ?? room.settings.baseDistanceKm
+  const baseTripCost = baseDistanceKm * fuelCostPerKm
   const detourCost = detourDistanceKm * fuelCostPerKm
   const totalTripCost = baseTripCost + detourCost + room.settings.tollCost
   const peopleInCar = activePassengers.length + 1
@@ -64,6 +65,8 @@ export function calculateRoomSummary(room: RoomState): RoomSummary {
       id: passenger.id,
       name: passenger.name,
       pickupLandmark: passenger.pickupLandmark,
+      pickupLat: passenger.pickupLat,
+      pickupLng: passenger.pickupLng,
       detourKm: passenger.detourKm,
       baseShare,
       detourShare,
@@ -80,7 +83,7 @@ export function calculateRoomSummary(room: RoomState): RoomSummary {
     driverNickname: room.driverNickname,
     origin: room.settings.origin,
     destination: room.settings.destination,
-    baseDistanceKm: room.settings.baseDistanceKm,
+    baseDistanceKm,
     actualDistanceKm,
     detourDistanceKm,
     fuelCostPerKm,
