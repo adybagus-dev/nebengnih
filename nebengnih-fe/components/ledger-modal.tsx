@@ -1,28 +1,8 @@
 "use client"
 
 import { CheckCircle2, X } from "lucide-react"
-
-const today = new Date().toLocaleDateString("en-US", {
-  weekday: "long",
-  year: "numeric",
-  month: "long",
-  day: "numeric",
-})
-
-const LEDGER_PREVIEW = `🚗 NEBENGNIH DAILY REPORT 🚗
-Date: ${today}
-
-Pickup Route Sequence:
------------------------
-1. Andi ➔ 📍 Front of Indomaret Gang 4
-   Bill: IDR 22,500
-
-2. Budi ➔ 📍 Alfamidi Pajajaran
-   Bill: IDR 25,000
------------------------
-Total Tolls: IDR 20,000
-Settle via manual transfer to Driver.
-Drive safe! 🙏`
+import { useRoom } from "@/components/providers/room-provider"
+import { buildLedgerText } from "@/lib/room/calculations"
 
 interface LedgerModalProps {
   open: boolean
@@ -30,7 +10,10 @@ interface LedgerModalProps {
 }
 
 export function LedgerModal({ open, onClose }: LedgerModalProps) {
+  const { summary } = useRoom()
+
   if (!open) return null
+  const ledgerPreview = buildLedgerText(summary)
 
   return (
     /* backdrop */
@@ -81,7 +64,7 @@ export function LedgerModal({ open, onClose }: LedgerModalProps) {
           {/* preview box */}
           <div className="w-full rounded-2xl border border-border bg-secondary/50 p-4">
             <pre className="whitespace-pre-wrap font-mono text-xs leading-relaxed text-foreground">
-              {LEDGER_PREVIEW}
+              {ledgerPreview}
             </pre>
           </div>
 

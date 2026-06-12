@@ -8,23 +8,19 @@ import { PassengerSequencer } from "@/components/passenger-sequencer"
 import { RideStats } from "@/components/ride-stats"
 import { SettingsSheet } from "@/components/settings-sheet"
 import { LedgerModal } from "@/components/ledger-modal"
-
-const today = new Date().toLocaleDateString("en-US", {
-  weekday: "long",
-  year: "numeric",
-  month: "long",
-  day: "numeric",
-})
-
-const LEDGER_TEXT = `🚗 NEBENGNIH DAILY REPORT 🚗\nDate: ${today}\n\nPickup Route Sequence:\n-----------------------\n1. Andi ➔ 📍 Front of Indomaret Gang 4\n   Bill: IDR 22,500\n\n2. Budi ➔ 📍 Alfamidi Pajajaran\n   Bill: IDR 25,000\n-----------------------\nTotal Tolls: IDR 20,000\nSettle via manual transfer to Driver.\nDrive safe! 🙏`
+import { buildLedgerText } from "@/lib/room/calculations"
+import { useRoom } from "@/components/providers/room-provider"
 
 export default function DriverDashboardPage() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [ledgerOpen, setLedgerOpen] = useState(false)
+  const { summary } = useRoom()
 
   async function handleCopyLedger() {
+    const ledgerText = buildLedgerText(summary)
+
     try {
-      await navigator.clipboard.writeText(LEDGER_TEXT)
+      await navigator.clipboard.writeText(ledgerText)
     } catch {
       // fallback: modal still opens even if clipboard is denied
     }

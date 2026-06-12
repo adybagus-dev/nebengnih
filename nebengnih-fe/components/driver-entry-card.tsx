@@ -2,9 +2,11 @@
 
 import { Car } from "lucide-react"
 import { useRouter } from "next/navigation"
+import { useRoom } from "@/components/providers/room-provider"
 
 export function DriverEntryCard() {
   const router = useRouter()
+  const { createRoom } = useRoom()
 
   return (
     <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
@@ -20,7 +22,10 @@ export function DriverEntryCard() {
 
       <button
         type="button"
-        onClick={() => router.push("/driver/empty")}
+        onClick={() => {
+          createRoom()
+          router.push("/driver")
+        }}
         className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3.5 text-sm font-bold text-primary-foreground shadow-md shadow-primary/25 transition-transform active:scale-[0.98]"
       >
         <Car className="size-4" />

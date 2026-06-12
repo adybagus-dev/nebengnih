@@ -8,7 +8,11 @@ const DEFAULT_CENTER: [number, number] = [-6.5984, 106.7988]
 const INDOMARET_COORDS: [number, number] = [-6.5981, 106.7993]
 const PIN_COORDS: [number, number] = [-6.5987, 106.799]
 
-export function PickupMapPreview() {
+interface PickupMapPreviewProps {
+  landmark: string
+}
+
+export function PickupMapPreview({ landmark }: PickupMapPreviewProps) {
   const mapRef = useRef<HTMLDivElement>(null)
   const mapInstanceRef = useRef<import("leaflet").Map | null>(null)
   const pinMarkerRef = useRef<import("leaflet").Marker | null>(null)
@@ -148,6 +152,7 @@ export function PickupMapPreview() {
           <p className="text-xs leading-relaxed text-muted-foreground">
             Need to move? Tap anywhere on the map above to update your driver
             with your precise pickup landmark instantly.
+            {landmark ? ` Current landmark: ${landmark}.` : ""}
           </p>
         </div>
       </div>

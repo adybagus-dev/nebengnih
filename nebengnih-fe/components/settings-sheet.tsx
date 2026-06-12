@@ -1,14 +1,15 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Settings, X } from "lucide-react"
 import {
   Sheet,
   SheetContent,
   SheetHeader,
   SheetTitle,
-  SheetClose,
 } from "@/components/ui/sheet"
+import { useRoom } from "@/components/providers/room-provider"
+import { formatMoney } from "@/lib/room/calculations"
 
 interface SettingsSheetProps {
   open: boolean
@@ -16,13 +17,36 @@ interface SettingsSheetProps {
 }
 
 export function SettingsSheet({ open, onOpenChange }: SettingsSheetProps) {
-  const [startLocation, setStartLocation] = useState("Jl. Raya Pajajaran No. 12, Bogor")
-  const [destination, setDestination] = useState("Sudirman Central Business District, Jakarta")
-  const [fuelEfficiency, setFuelEfficiency] = useState("10")
-  const [fuelPrice, setFuelPrice] = useState("12500")
-  const [tollCosts, setTollCosts] = useState("20000")
+  const { room, summary, setDriverNickname, updateSettings } = useRoom()
+  const [driverNickname, setDriverNicknameInput] = useState(room.driverNickname)
+  const [startLocation, setStartLocation] = useState(room.settings.origin)
+  const [destination, setDestination] = useState(room.settings.destination)
+  const [fuelEfficiency, setFuelEfficiency] = useState(String(room.settings.fuelEfficiencyKmPerLiter))
+  const [fuelPrice, setFuelPrice] = useState(String(room.settings.fuelPricePerLiter))
+  const [tollCosts, setTollCosts] = useState(String(room.settings.tollCost))
+  const [baseDistance, setBaseDistance] = useState(String(room.settings.baseDistanceKm))
+
+  useEffect(() => {
+    if (!open) return
+    setDriverNicknameInput(room.driverNickname)
+    setStartLocation(room.settings.origin)
+    setDestination(room.settings.destination)
+    setFuelEfficiency(String(room.settings.fuelEfficiencyKmPerLiter))
+    setFuelPrice(String(room.settings.fuelPricePerLiter))
+    setTollCosts(String(room.settings.tollCost))
+    setBaseDistance(String(room.settings.baseDistanceKm))
+  }, [open, room])
 
   function handleSave() {
+    setDriverNickname(driverNickname.trim() || "Driver")
+    updateSettings({
+      origin: startLocation.trim(),
+      destination: destination.trim(),
+      fuelEfficiencyKmPerLiter: Number(fuelEfficiency) || 1,
+      fuelPricePerLiter: Number(fuelPrice) || 0,
+      tollCost: Number(tollCosts) || 0,
+      baseDistanceKm: Number(baseDistance) || 0,
+    })
     onOpenChange(false)
   }
 
@@ -38,19 +62,36 @@ export function SettingsSheet({ open, onOpenChange }: SettingsSheetProps) {
             <Settings className="size-4 text-primary" />
             Route Settings
           </SheetTitle>
-          <SheetClose asChild>
-            <button
-              type="button"
-              aria-label="Close settings"
-              className="flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground active:scale-95"
-            >
-              <X className="size-4" />
-            </button>
-          </SheetClose>
+          <button
+            type="button"
+            aria-label="Close settings"
+            onClick={() => onOpenChange(false)}
+            className="flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground active:scale-95"
+          >
+            <X className="size-4" />
+          </button>
         </SheetHeader>
 
         <div className="overflow-y-auto px-5 py-5">
           {/* Route locations */}
+          <fieldset className="mb-5">
+            <legend className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Driver Identity
+            </legend>
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="driver-nickname" className="text-sm font-medium text-foreground">
+                Driver Nickname
+              </label>
+              <input
+                id="driver-nickname"
+                type="text"
+                value={driverNickname}
+                onChange={(e) => setDriverNicknameInput(e.target.value)}
+                className="w-full rounded-xl border border-border bg-background px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            </div>
+          </fieldset>
+
           <fieldset className="mb-5">
             <legend className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Route Locations
@@ -79,6 +120,24 @@ export function SettingsSheet({ open, onOpenChange }: SettingsSheetProps) {
                   onChange={(e) => setDestination(e.target.value)}
                   className="w-full rounded-xl border border-border bg-background px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                 />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="base-distance" className="text-sm font-medium text-foreground">
+                  Base Route Distance
+                </label>
+                <div className="flex overflow-hidden rounded-xl border border-border bg-background focus-within:ring-2 focus-within:ring-ring">
+                  <input
+                    id="base-distance"
+                    type="number"
+                    min="0"
+                    value={baseDistance}
+                    onChange={(e) => setBaseDistance(e.target.value)}
+                    className="min-w-0 flex-1 bg-transparent px-3 py-3 text-sm font-mono text-foreground focus:outline-none"
+                  />
+                  <span className="flex items-center bg-secondary px-3 text-xs font-semibold text-muted-foreground">
+                    km
+                  </span>
+                </div>
               </div>
             </div>
           </fieldset>
@@ -162,6 +221,13 @@ export function SettingsSheet({ open, onOpenChange }: SettingsSheetProps) {
             <Settings className="size-4" />
             Update Settings &amp; Recalculate
           </button>
+
+          <div className="mb-[max(1rem,env(safe-area-inset-bottom))] rounded-2xl border border-border bg-secondary/40 p-3.5">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-semibold text-muted-foreground">Current base share</span>
+              <span className="font-mono text-xs font-semibold text-foreground">{formatMoney(summary.baseShare)}</span>
+            </div>
+          </div>
         </div>
       </SheetContent>
     </Sheet>

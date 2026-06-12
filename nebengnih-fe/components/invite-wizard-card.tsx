@@ -2,14 +2,14 @@
 
 import { useState } from "react"
 import { Link2, Check } from "lucide-react"
-
-const INVITE_URL = "nebengnih.app/room/BGR-99A"
+import { useRoom } from "@/components/providers/room-provider"
 
 export function InviteWizardCard() {
   const [copied, setCopied] = useState(false)
+  const { summary } = useRoom()
 
   function handleCopy() {
-    navigator.clipboard.writeText(`https://${INVITE_URL}`).catch(() => {})
+    navigator.clipboard.writeText(summary.shareUrl).catch(() => {})
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
@@ -45,7 +45,7 @@ export function InviteWizardCard() {
             aria-label="Invite link"
             className="flex-1 truncate px-3.5 py-3 font-mono text-xs font-medium text-muted-foreground"
           >
-            {INVITE_URL}
+            {summary.shareUrl}
           </p>
           <button
             type="button"
@@ -69,7 +69,7 @@ export function InviteWizardCard() {
 
         <p className="mt-3 text-center text-xs text-muted-foreground">
           Room code:{" "}
-          <span className="font-mono font-bold text-primary">BGR-99A</span>
+          <span className="font-mono font-bold text-primary">{summary.roomCode}</span>
         </p>
       </div>
     </section>

@@ -3,13 +3,16 @@
 import { useState } from "react"
 import { Users, ArrowRight } from "lucide-react"
 import { useRouter } from "next/navigation"
+import { useRoom } from "@/components/providers/room-provider"
 
 export function PassengerEntryCard() {
   const [code, setCode] = useState("")
   const router = useRouter()
+  const { joinRoom } = useRoom()
 
   function handleJoin() {
     if (code.trim()) {
+      joinRoom(code.trim())
       router.push("/passenger")
     }
   }

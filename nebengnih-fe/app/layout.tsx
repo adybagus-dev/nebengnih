@@ -1,13 +1,8 @@
 import { Analytics } from '@vercel/analytics/next'
 import type { Metadata, Viewport } from 'next'
-import { Geist, Geist_Mono } from 'next/font/google'
+import type { ReactNode } from 'react'
+import { RoomProvider } from '@/components/providers/room-provider'
 import './globals.css'
-
-const geistSans = Geist({ variable: '--font-geist-sans', subsets: ['latin'] })
-const geistMono = Geist_Mono({
-  variable: '--font-geist-mono',
-  subsets: ['latin'],
-})
 
 export const viewport: Viewport = {
   themeColor: '#10B981',
@@ -19,8 +14,8 @@ export const viewport: Viewport = {
 }
 
 export const metadata: Metadata = {
-  title: 'NebengNih — Driver Dashboard',
-  description: 'Anonymous carpool coordination & cost splitting for drivers.',
+  title: 'NebengNih',
+  description: 'Anonymous carpool coordination & cost splitting for daily rides.',
   generator: 'v0.app',
   appleWebApp: {
     capable: true,
@@ -49,12 +44,12 @@ export const metadata: Metadata = {
 export default function RootLayout({
   children,
 }: Readonly<{
-  children: React.ReactNode
+  children: ReactNode
 }>) {
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
+    <html lang="en">
       <body className="font-sans antialiased bg-background overscroll-none">
-        {children}
+        <RoomProvider>{children}</RoomProvider>
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>

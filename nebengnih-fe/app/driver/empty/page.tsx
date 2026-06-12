@@ -6,9 +6,11 @@ import { Settings } from "lucide-react"
 import { EmptyRouteMap } from "@/components/empty-route-map"
 import { InviteWizardCard } from "@/components/invite-wizard-card"
 import { SettingsSheet } from "@/components/settings-sheet"
+import { useRoom } from "@/components/providers/room-provider"
 
 export default function DriverEmptyStatePage() {
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const { summary } = useRoom()
 
   return (
     <div className="relative mx-auto flex min-h-screen w-full max-w-md flex-col bg-background">
@@ -21,7 +23,7 @@ export default function DriverEmptyStatePage() {
 
         <div className="flex items-center gap-2">
           <span className="rounded-lg border border-primary/30 bg-primary/10 px-3 py-1.5 font-mono text-xs font-bold tracking-wide text-primary">
-            BGR-99A
+            {summary.roomCode}
           </span>
           <button
             type="button"
