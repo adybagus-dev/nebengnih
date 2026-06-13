@@ -183,34 +183,47 @@ export function RouteMap() {
 
       const layers: import("leaflet").Layer[] = []
 
-      if (geometry.base.length >= 2) {
-        const baseRoute = L.polyline(
-          geometry.base.map((point) => [point.lat, point.lng]),
+      if (geometry.actual.length >= 2) {
+        const actualCasing = L.polyline(
+          geometry.actual.map((point) => [point.lat, point.lng]),
           {
-            color: "#64748b",
-            weight: 5,
-            opacity: 0.65,
-            dashArray: "8 10",
+            color: "#dcfce7",
+            weight: 12,
+            opacity: 0.95,
             lineCap: "round",
             lineJoin: "round",
           }
         ).addTo(map)
-        layers.push(baseRoute)
-      }
+        layers.push(actualCasing)
 
-      if (geometry.actual.length >= 2) {
         const actualRoute = L.polyline(
           geometry.actual.map((point) => [point.lat, point.lng]),
           {
-            color: geometry.complete ? "#10b981" : "#f59e0b",
-            weight: 7,
-            opacity: 0.95,
+            color: "#10b981",
+            weight: 8,
+            opacity: 1,
             dashArray: geometry.complete ? undefined : "10 8",
             lineCap: "round",
             lineJoin: "round",
           }
         ).addTo(map)
         layers.push(actualRoute)
+      }
+
+      if (geometry.base.length >= 2) {
+        const baseRoute = L.polyline(
+          geometry.base.map((point) => [point.lat, point.lng]),
+          {
+            color: "#3b82f6",
+            weight: 3,
+            opacity: 0.95,
+            dashArray: "7 10",
+            lineCap: "round",
+            lineJoin: "round",
+          }
+        ).addTo(map)
+        baseRoute.bringToFront()
+        layers.push(baseRoute)
       }
 
       spreadOverlappingStops(stops).forEach((stop, index) => {
@@ -351,7 +364,7 @@ export function RouteMap() {
 
           <div className="mt-2 flex items-center gap-3 text-[9px] font-semibold text-muted-foreground">
             <span className="flex items-center gap-1">
-              <span className="h-1 w-3 rounded-full bg-slate-500" />
+              <span className="h-1 w-3 rounded-full bg-blue-500" />
               Direct
             </span>
             {routeReviewMessage ? (
@@ -361,11 +374,7 @@ export function RouteMap() {
               </span>
             ) : (
               <span className="flex items-center gap-1">
-                <span
-                  className={`h-1 w-3 rounded-full ${
-                    routeComplete ? "bg-emerald-500" : "bg-amber-500"
-                  }`}
-                />
+                <span className="h-1 w-3 rounded-full bg-emerald-500" />
                 Pickups
               </span>
             )}

@@ -39,8 +39,8 @@ export function getMissingRouteSetupFields(settings: RouteSettings, driverNickna
 
 function buildCrossWaterMessage(target: RouteValidationTarget) {
   return target === "driver"
-    ? "This route crosses water or another island. Please choose a different start and destination on the same island."
-    : "This pickup crosses water or another island. Please choose a different pickup location on the same island as the driver route."
+    ? "This route crosses water, uses a ferry, or reaches another island without a continuous road connection. Please choose a different start and destination connected by road."
+    : "This pickup crosses water, uses a ferry, or reaches another island without a continuous road connection. Please choose a pickup connected to the driver route by road."
 }
 
 export async function validateRouteBeforeSave(

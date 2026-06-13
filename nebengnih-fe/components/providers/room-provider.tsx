@@ -249,7 +249,7 @@ export function RoomProvider({
     void persistRoom(room, { trackAsDriver: trackAsDriverRef.current }).catch((error) => {
       if (
         error instanceof Error &&
-        error.message.includes("crosses water or another island")
+        error.message.includes("continuous road connection")
       ) {
         return
       }

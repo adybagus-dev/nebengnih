@@ -6,8 +6,19 @@ type Coord = {
 }
 
 type RouteResponse = {
+  code?: string
+  message?: string
   routes?: Array<{
     distance: number
+    legs?: Array<{
+      distance: number
+      steps?: Array<{
+        mode?: string
+        name?: string
+        ref?: string
+        destinations?: string
+      }>
+    }>
     geometry?: {
       coordinates: [number, number][]
       type: "LineString"
@@ -90,31 +101,56 @@ async function fetchGeometry(points: Coord[]) {
   )
 }
 
-function needsCrossWaterFallback(params: {
-  baseRoadDistanceKm: number | null
-  actualRoadDistanceKm: number | null
-  baseGeodesicDistanceKm: number
-  actualGeodesicDistanceKm: number
-}) {
-  const { baseRoadDistanceKm, actualRoadDistanceKm, baseGeodesicDistanceKm, actualGeodesicDistanceKm } = params
-
-  if (!Number.isFinite(baseGeodesicDistanceKm) || baseGeodesicDistanceKm <= 0) return false
-  if (!Number.isFinite(actualGeodesicDistanceKm) || actualGeodesicDistanceKm <= 0) return false
-  if (baseRoadDistanceKm === null || actualRoadDistanceKm === null) return true
-
-  const baseRatio = baseRoadDistanceKm / baseGeodesicDistanceKm
-  const actualRatio = actualRoadDistanceKm / actualGeodesicDistanceKm
-  const baseGapKm = baseRoadDistanceKm - baseGeodesicDistanceKm
-  const actualGapKm = actualRoadDistanceKm - actualGeodesicDistanceKm
-
-  const ratioThreshold = actualGeodesicDistanceKm >= 15 ? 1.45 : 1.6
-  const gapThreshold = actualGeodesicDistanceKm >= 15 ? 8 : 5
-
+function isUnsupportedRouteResponse(response: Response, json: RouteResponse) {
   return (
-    baseRatio > ratioThreshold ||
-    actualRatio > ratioThreshold ||
-    baseGapKm > gapThreshold ||
-    actualGapKm > gapThreshold
+    json.code === "NoRoute" ||
+    json.code === "NoSegment" ||
+    (response.ok && (!json.routes || json.routes.length === 0))
+  )
+}
+
+function routeUsesFerry(route: NonNullable<RouteResponse["routes"]>[number]) {
+  const ferryTerms = ["ferry", "feri", "penyeberangan"]
+
+  return (route.legs ?? []).some((leg) =>
+    (leg.steps ?? []).some((step) => {
+      const routeDetails = [
+        step.mode,
+        step.name,
+        step.ref,
+        step.destinations,
+      ]
+        .filter((value): value is string => Boolean(value))
+        .join(" ")
+        .toLowerCase()
+
+      return ferryTerms.some((term) => routeDetails.includes(term))
+    })
+  )
+}
+
+function isSuspiciousRoadLeg(roadDistanceKm: number, directDistanceKm: number) {
+  if (!Number.isFinite(roadDistanceKm) || !Number.isFinite(directDistanceKm)) return false
+  if (directDistanceKm < 0.25) return false
+
+  const ratio = roadDistanceKm / directDistanceKm
+  const gapKm = roadDistanceKm - directDistanceKm
+
+  if (directDistanceKm < 3) return ratio >= 4 && gapKm >= 6
+  if (directDistanceKm < 10) return ratio >= 3 && gapKm >= 10
+  if (directDistanceKm < 25) return ratio >= 2.3 && gapKm >= 14
+  return ratio >= 1.8 && gapKm >= 25
+}
+
+function routeHasSuspiciousLeg(
+  route: NonNullable<RouteResponse["routes"]>[number],
+  points: Coord[]
+) {
+  const legs = route.legs ?? []
+  if (legs.length !== points.length - 1) return false
+
+  return legs.some((leg, index) =>
+    isSuspiciousRoadLeg(leg.distance / 1000, haversineKm(points[index], points[index + 1]))
   )
 }
 
@@ -158,60 +194,69 @@ export async function fetchRouteMetrics(settings: RouteSettings, passengers: Pas
     }
   }
 
-  const coordinates = [origin, ...pickups, destination]
+  const actualPoints = [origin, ...pickups, destination]
+  const coordinates = actualPoints
     .map((coord) => `${coord.lng},${coord.lat}`)
     .join(";")
   const geodesicBaseKm = routeDistanceKm([origin, destination])
-  const geodesicActualKm = routeDistanceKm([origin, ...pickups, destination])
+  const geodesicActualKm = routeDistanceKm(actualPoints)
+
+  function crossWaterMetrics() {
+    const manualBaseDistanceKm = Math.max(settings.baseDistanceKm, geodesicBaseKm * 2.2)
+    const manualActualDistanceKm = Math.max(manualBaseDistanceKm, geodesicActualKm * 2.2)
+
+    return {
+      routeStatus: "manual-review" as const,
+      validationType: "cross-water" as const,
+      validationMessage:
+        "This route crosses water, uses a ferry, or reaches another island without a continuous road connection.",
+      baseDistanceKm: manualBaseDistanceKm,
+      actualDistanceKm: manualActualDistanceKm,
+      detourDistanceKm: Math.max(0, manualActualDistanceKm - manualBaseDistanceKm),
+    }
+  }
 
   try {
     const response = await fetch(
-      `https://router.project-osrm.org/route/v1/driving/${coordinates}?overview=false&steps=false&annotations=distance`,
+      `https://router.project-osrm.org/route/v1/driving/${coordinates}?overview=false&steps=true&annotations=distance`,
       { cache: "no-store" }
     )
-
-    if (!response.ok) throw new Error("OSRM response not ok")
-
     const json = (await response.json()) as RouteResponse
-    const routeDistanceMeters = json.routes?.[0]?.distance
+
+    if (isUnsupportedRouteResponse(response, json)) return crossWaterMetrics()
+    if (!response.ok) throw new Error(json.message ?? "OSRM response not ok")
+
+    const actualRoute = json.routes?.[0]
+    const routeDistanceMeters = actualRoute?.distance
     if (typeof routeDistanceMeters !== "number" || !Number.isFinite(routeDistanceMeters)) {
       throw new Error("Missing route distance")
     }
 
     const actualDistanceKm = routeDistanceMeters / 1000
     const baseResponse = await fetch(
-      `https://router.project-osrm.org/route/v1/driving/${origin.lng},${origin.lat};${destination.lng},${destination.lat}?overview=false&steps=false&annotations=distance`,
+      `https://router.project-osrm.org/route/v1/driving/${origin.lng},${origin.lat};${destination.lng},${destination.lat}?overview=false&steps=true&annotations=distance`,
       { cache: "no-store" }
     )
-
-    if (!baseResponse.ok) throw new Error("Base OSRM response not ok")
-
     const baseJson = (await baseResponse.json()) as RouteResponse
-    const baseDistanceMeters = baseJson.routes?.[0]?.distance
+
+    if (isUnsupportedRouteResponse(baseResponse, baseJson)) return crossWaterMetrics()
+    if (!baseResponse.ok) throw new Error(baseJson.message ?? "Base OSRM response not ok")
+
+    const baseRoute = baseJson.routes?.[0]
+    const baseDistanceMeters = baseRoute?.distance
     const baseDistanceKm = typeof baseDistanceMeters === "number" && Number.isFinite(baseDistanceMeters)
       ? baseDistanceMeters / 1000
       : settings.baseDistanceKm
 
     if (
-      needsCrossWaterFallback({
-        baseRoadDistanceKm: baseDistanceKm,
-        actualRoadDistanceKm: actualDistanceKm,
-        baseGeodesicDistanceKm: geodesicBaseKm,
-        actualGeodesicDistanceKm: geodesicActualKm,
-      })
+      !actualRoute ||
+      !baseRoute ||
+      routeUsesFerry(actualRoute) ||
+      routeUsesFerry(baseRoute) ||
+      routeHasSuspiciousLeg(actualRoute, actualPoints) ||
+      routeHasSuspiciousLeg(baseRoute, [origin, destination])
     ) {
-      return {
-        routeStatus: "manual-review" as const,
-        validationType: "cross-water" as const,
-        validationMessage: "This route crosses water or another island. Please choose another route on the same island.",
-        baseDistanceKm: Math.max(settings.baseDistanceKm, geodesicBaseKm * 2.2),
-        actualDistanceKm: Math.max(settings.baseDistanceKm, geodesicActualKm * 2.2),
-        detourDistanceKm: Math.max(
-          0,
-          Math.max(settings.baseDistanceKm, geodesicActualKm * 2.2) -
-            Math.max(settings.baseDistanceKm, geodesicBaseKm * 2.2)
-        ),
-      }
+      return crossWaterMetrics()
     }
 
     return {
