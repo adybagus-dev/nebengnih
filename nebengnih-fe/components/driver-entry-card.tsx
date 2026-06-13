@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { ArrowRight, Car, History, Plus, Trash2, X } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useRoom } from "@/components/providers/room-provider"
-import { getDriverSession, listDriverRooms, saveDriverRoomPointer } from "@/lib/driver-session"
+import { listDriverRooms, saveDriverRoomPointer } from "@/lib/driver-session"
 import type { DriverRoomHistoryEntry } from "@/lib/room/storage"
 
 export function DriverEntryCard() {
@@ -14,13 +14,13 @@ export function DriverEntryCard() {
   const [activeRoomCode, setActiveRoomCode] = useState<string | null>(null)
   const [createConfirmOpen, setCreateConfirmOpen] = useState(false)
   const [removeTarget, setRemoveTarget] = useState<DriverRoomHistoryEntry | null>(null)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     let cancelled = false
 
     async function refreshRooms() {
       try {
-        await getDriverSession()
         const result = await listDriverRooms()
         if (cancelled) return
 
@@ -30,6 +30,10 @@ export function DriverEntryCard() {
         if (!cancelled) {
           setHistory([])
           setActiveRoomCode(null)
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false)
         }
       }
     }
@@ -96,71 +100,88 @@ export function DriverEntryCard() {
           </div>
         </div>
 
-        {activeRoom ? (
-          <button
-            type="button"
-            onClick={() => openRoom(activeRoom.roomCode)}
-            className="flex w-full items-center justify-between rounded-xl bg-primary px-4 py-3.5 text-left text-primary-foreground shadow-md shadow-primary/25 transition-transform active:scale-[0.98]"
-          >
-            <span>
-              <span className="block text-xs font-medium opacity-80">Continue current room</span>
-              <span className="mt-0.5 block font-mono text-sm font-bold">{activeRoom.roomCode}</span>
-            </span>
-            <ArrowRight className="size-5" />
-          </button>
-        ) : null}
-
-        <button
-          type="button"
-          onClick={handleCreateClick}
-          className={
-            activeRoom
-              ? "mt-2.5 flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-background py-3 text-sm font-semibold text-foreground transition-colors hover:bg-secondary active:scale-[0.98]"
-              : "flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3.5 text-sm font-bold text-primary-foreground shadow-md shadow-primary/25 transition-transform active:scale-[0.98]"
-          }
-        >
-          <Plus className="size-4" />
-          Create New Route Room
-        </button>
-
-        {previousRooms.length > 0 ? (
-          <div className="mt-5 border-t border-border pt-4">
-            <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              <History className="size-3.5" />
-              Previous rooms
-            </p>
-
-            <div className="space-y-2">
-              {previousRooms.map((entry) => (
-                <div
-                  key={entry.roomCode}
-                  className="flex items-center gap-2 rounded-xl border border-border bg-background p-3"
-                >
-                  <button
-                    type="button"
-                    onClick={() => openRoom(entry.roomCode)}
-                    className="min-w-0 flex-1 text-left"
-                  >
-                    <span className="block font-mono text-xs font-bold text-primary">
-                      {entry.roomCode}
-                    </span>
-                    <span className="mt-1 block truncate text-xs text-muted-foreground">
-                      {entry.origin} to {entry.destination}
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    aria-label={`Remove ${entry.roomCode} from this device`}
-                    onClick={() => setRemoveTarget(entry)}
-                    className="flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-                  >
-                    <Trash2 className="size-4" />
-                  </button>
-                </div>
-              ))}
+        {loading ? (
+          <div className="space-y-3">
+            <div className="animate-pulse rounded-xl border border-border bg-background p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div className="h-9 w-28 rounded-lg bg-muted" />
+                <div className="h-9 w-9 rounded-lg bg-muted" />
+              </div>
+            </div>
+            <div className="animate-pulse rounded-xl border border-border bg-background p-4">
+              <div className="h-4 w-24 rounded bg-muted" />
+              <div className="mt-3 h-12 rounded-xl bg-muted" />
             </div>
           </div>
-        ) : null}
+        ) : (
+          <>
+            {activeRoom ? (
+              <button
+                type="button"
+                onClick={() => openRoom(activeRoom.roomCode)}
+                className="flex w-full items-center justify-between rounded-xl bg-primary px-4 py-3.5 text-left text-primary-foreground shadow-md shadow-primary/25 transition-transform active:scale-[0.98]"
+              >
+                <span>
+                  <span className="block text-xs font-medium opacity-80">Continue current room</span>
+                  <span className="mt-0.5 block font-mono text-sm font-bold">{activeRoom.roomCode}</span>
+                </span>
+                <ArrowRight className="size-5" />
+              </button>
+            ) : null}
+
+            <button
+              type="button"
+              onClick={handleCreateClick}
+              className={
+                activeRoom
+                  ? "mt-2.5 flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-background py-3 text-sm font-semibold text-foreground transition-colors hover:bg-secondary active:scale-[0.98]"
+                  : "flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3.5 text-sm font-bold text-primary-foreground shadow-md shadow-primary/25 transition-transform active:scale-[0.98]"
+              }
+            >
+              <Plus className="size-4" />
+              Create New Route Room
+            </button>
+
+            {previousRooms.length > 0 ? (
+              <div className="mt-5 border-t border-border pt-4">
+                <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  <History className="size-3.5" />
+                  Previous rooms
+                </p>
+
+                <div className="space-y-2">
+                  {previousRooms.map((entry) => (
+                    <div
+                      key={entry.roomCode}
+                      className="flex items-center gap-2 rounded-xl border border-border bg-background p-3"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => openRoom(entry.roomCode)}
+                        className="min-w-0 flex-1 text-left"
+                      >
+                        <span className="block font-mono text-xs font-bold text-primary">
+                          {entry.roomCode}
+                        </span>
+                        <span className="mt-1 block truncate text-xs text-muted-foreground">
+                          {entry.origin} to {entry.destination}
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={`Remove ${entry.roomCode} from this device`}
+                        onClick={() => setRemoveTarget(entry)}
+                        className="flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                      >
+                        <Trash2 className="size-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </>
+        )}
       </div>
 
       {createConfirmOpen ? (

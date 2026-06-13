@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto"
+import { createHash, randomUUID } from "node:crypto"
 import { NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
 
@@ -20,13 +20,15 @@ function readCookieToken(request: Request) {
   return raw.match(new RegExp(`${COOKIE_NAME}=([^;]+)`))?.[1] ?? null
 }
 
+function getOrCreateToken(request: Request) {
+  return readCookieToken(request) ?? randomUUID()
+}
+
 async function ensureDriverSession(request: Request) {
   const supabase = getSupabaseClient()
   if (!supabase) throw new Error("Supabase is not configured")
 
-  const token = readCookieToken(request)
-  if (!token) throw new Error("Missing driver session cookie")
-
+  const token = getOrCreateToken(request)
   const hash = tokenHash(token)
   const { data, error } = await supabase
     .from("driver_sessions")
@@ -38,7 +40,18 @@ async function ensureDriverSession(request: Request) {
     throw new Error(error?.message ?? "Unable to load driver session")
   }
 
-  return data
+  return { session: data, token }
+}
+
+function setSessionCookieIfMissing(response: NextResponse, request: Request, token: string) {
+  if (readCookieToken(request)) return
+
+  response.cookies.set(COOKIE_NAME, token, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+  })
 }
 
 export async function GET(request: Request) {
@@ -46,7 +59,7 @@ export async function GET(request: Request) {
     const supabase = getSupabaseClient()
     if (!supabase) return NextResponse.json({ error: "Supabase is not configured" }, { status: 500 })
 
-    const session = await ensureDriverSession(request)
+    const { session, token } = await ensureDriverSession(request)
     const { data, error } = await supabase
       .from("rooms")
       .select("code,payload,updated_at")
@@ -71,10 +84,12 @@ export async function GET(request: Request) {
       }
     })
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       activeRoomCode: session.last_active_room_code ?? null,
       rooms,
     })
+    setSessionCookieIfMissing(response, request, token)
+    return response
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Unknown error" }, { status: 500 })
   }
@@ -85,7 +100,7 @@ export async function POST(request: Request) {
     const supabase = getSupabaseClient()
     if (!supabase) return NextResponse.json({ error: "Supabase is not configured" }, { status: 500 })
 
-    const session = await ensureDriverSession(request)
+    const { session, token } = await ensureDriverSession(request)
     const body = (await request.json()) as { roomCode?: string; payload?: unknown }
     if (!body.roomCode || !body.payload) {
       return NextResponse.json({ error: "Missing roomCode or payload" }, { status: 400 })
@@ -109,7 +124,9 @@ export async function POST(request: Request) {
       .update({ last_active_room_code: body.roomCode.toUpperCase() })
       .eq("id", session.id)
 
-    return NextResponse.json({ ok: true })
+    const response = NextResponse.json({ ok: true })
+    setSessionCookieIfMissing(response, request, token)
+    return response
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Unknown error" }, { status: 500 })
   }
@@ -120,7 +137,7 @@ export async function PATCH(request: Request) {
     const supabase = getSupabaseClient()
     if (!supabase) return NextResponse.json({ error: "Supabase is not configured" }, { status: 500 })
 
-    const session = await ensureDriverSession(request)
+    const { session, token } = await ensureDriverSession(request)
     const body = (await request.json()) as { roomCode?: string }
     if (!body.roomCode) {
       return NextResponse.json({ error: "Missing roomCode" }, { status: 400 })
@@ -135,7 +152,9 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    return NextResponse.json({ ok: true })
+    const response = NextResponse.json({ ok: true })
+    setSessionCookieIfMissing(response, request, token)
+    return response
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Unknown error" }, { status: 500 })
   }
@@ -146,7 +165,7 @@ export async function DELETE(request: Request) {
     const supabase = getSupabaseClient()
     if (!supabase) return NextResponse.json({ error: "Supabase is not configured" }, { status: 500 })
 
-    const session = await ensureDriverSession(request)
+    const { session, token } = await ensureDriverSession(request)
     const body = (await request.json()) as { roomCode?: string }
     if (!body.roomCode) {
       return NextResponse.json({ error: "Missing roomCode" }, { status: 400 })
@@ -175,7 +194,9 @@ export async function DELETE(request: Request) {
       .update({ last_active_room_code: data?.[0]?.code ?? null })
       .eq("id", session.id)
 
-    return NextResponse.json({ ok: true })
+    const response = NextResponse.json({ ok: true })
+    setSessionCookieIfMissing(response, request, token)
+    return response
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Unknown error" }, { status: 500 })
   }
