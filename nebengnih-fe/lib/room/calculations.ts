@@ -201,9 +201,9 @@ export function buildLedgerText(summary: RoomSummary, routeReviewMessage?: strin
 
   lines.push(
     "-----------------------",
-    `Base Distance: ${formatDistance(summary.baseDistanceKm)}`,
-    `Actual Distance: ${formatDistance(summary.actualDistanceKm)}`,
-    `Detour Distance: ${formatDistance(summary.detourDistanceKm)}`,
+    `Base route: ${formatDistance(summary.baseDistanceKm)}`,
+    `Estimated extra distance: ${formatDistance(summary.detourDistanceKm)}`,
+    `Route total (map): ${formatDistance(summary.actualDistanceKm)}`,
     `Fuel Cost / km: ${formatMoney(summary.fuelCostPerKm)}`,
     `Additional Cost: ${formatMoney(summary.additionalCost)}`,
     routeReviewMessage

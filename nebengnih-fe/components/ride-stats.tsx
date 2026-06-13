@@ -20,13 +20,14 @@ export function RideStats() {
 
   return (
     <section className="px-4 pt-5" aria-label="Ride stats and settings">
-      <div className="grid grid-cols-2 gap-2.5">
+      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
         <StatCard
           icon={<Route className="size-4 text-primary" />}
           title="Distance"
           rows={[
-            { label: "Base", value: `${summary.baseDistanceKm.toFixed(1)} km` },
-            { label: "Actual", value: `${summary.actualDistanceKm.toFixed(1)} km` },
+            { label: "Base route", value: `${summary.baseDistanceKm.toFixed(1)} km` },
+            { label: "Estimated extra distance", value: `${summary.detourDistanceKm.toFixed(1)} km` },
+            { label: "Route total (map)", value: `${summary.actualDistanceKm.toFixed(1)} km` },
           ]}
         />
         <StatCard
@@ -64,8 +65,8 @@ export function RideStats() {
 
 function StatCard({
   icon,
-  title,
-  rows,
+      title,
+      rows,
 }: {
   icon: ReactNode
   title: string
@@ -77,11 +78,13 @@ function StatCard({
         {icon}
         <span className="text-xs font-semibold text-foreground">{title}</span>
       </div>
-      <dl className="flex flex-col gap-1.5">
+      <dl className="flex flex-col gap-2">
         {rows.map((r) => (
-          <div key={r.label} className="flex items-center justify-between">
-            <dt className="text-xs text-muted-foreground">{r.label}</dt>
-            <dd className="font-mono text-xs font-semibold tabular-nums text-foreground">{r.value}</dd>
+          <div key={r.label} className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
+            <dt className="min-w-0 text-xs leading-tight text-muted-foreground">{r.label}</dt>
+            <dd className="max-w-full whitespace-nowrap text-right font-mono text-[11px] font-semibold tabular-nums text-foreground sm:text-xs">
+              {r.value}
+            </dd>
           </div>
         ))}
       </dl>

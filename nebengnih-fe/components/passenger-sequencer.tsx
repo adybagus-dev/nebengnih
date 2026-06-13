@@ -95,7 +95,11 @@ export function PassengerSequencer() {
             <PassengerCard
               key={passenger.id}
               name={passenger.name}
-              status={passenger.joiningToday ? `Detour: +${passenger.detourKm.toFixed(1)} km` : "Absent today"}
+              status={
+                passenger.joiningToday
+                  ? `Estimated extra distance: +${passenger.detourKm.toFixed(1)} km`
+                  : "Absent today"
+              }
               cost={passenger.joiningToday ? formatMoney(bill?.total ?? 0) : "IDR 0"}
               active={passenger.joiningToday}
               canMoveUp={index > 0}
