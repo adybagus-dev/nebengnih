@@ -1,4 +1,4 @@
-import type { Passenger, RoomState, RoomSummary } from "./types"
+import type { Passenger, RoomState, RoomSummary, RouteSettings } from "./types"
 
 function formatCurrency(amount: number) {
   return new Intl.NumberFormat("id-ID", {
@@ -32,6 +32,10 @@ function cleanText(value: string) {
   return value.trim().replace(/\s+/g, " ")
 }
 
+function roundRupiah(amount: number) {
+  return Math.round(amount)
+}
+
 export function generateRoomCode() {
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
   let suffix = ""
@@ -50,8 +54,60 @@ export function estimateDetourKm(landmark: string) {
   return Math.max(0.8, Math.round(estimate * 10) / 10)
 }
 
+function toRadians(value: number) {
+  return (value * Math.PI) / 180
+}
+
+function haversineKm(
+  start: { lat: number; lng: number },
+  end: { lat: number; lng: number }
+) {
+  const earthRadiusKm = 6371
+  const dLat = toRadians(end.lat - start.lat)
+  const dLng = toRadians(end.lng - start.lng)
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRadians(start.lat)) *
+      Math.cos(toRadians(end.lat)) *
+      Math.sin(dLng / 2) ** 2
+
+  return earthRadiusKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+}
+
+function hasCoords(lat?: number, lng?: number) {
+  return typeof lat === "number" && Number.isFinite(lat) && typeof lng === "number" && Number.isFinite(lng)
+}
+
+export function estimatePickupDetourKm(
+  settings: RouteSettings,
+  pickup: { lat: number; lng: number },
+  fallbackLandmark = ""
+) {
+  if (
+    !hasCoords(settings.originLat, settings.originLng) ||
+    !hasCoords(settings.destinationLat, settings.destinationLng)
+  ) {
+    return estimateDetourKm(fallbackLandmark)
+  }
+
+  const origin = { lat: settings.originLat as number, lng: settings.originLng as number }
+  const destination = {
+    lat: settings.destinationLat as number,
+    lng: settings.destinationLng as number,
+  }
+  const directRouteKm = haversineKm(origin, destination)
+  const viaPickupKm = haversineKm(origin, pickup) + haversineKm(pickup, destination)
+  const detourKm = Math.max(0, viaPickupKm - directRouteKm)
+
+  if (!Number.isFinite(detourKm) || detourKm <= 0) {
+    return estimateDetourKm(fallbackLandmark)
+  }
+
+  return Math.round(detourKm * 10) / 10
+}
+
 export function formatMoney(amount: number) {
-  return `IDR ${formatCurrency(amount)}`
+  return `IDR ${formatCurrency(roundRupiah(amount))}`
 }
 
 export function calculateRoomSummary(room: RoomState): RoomSummary {
@@ -64,15 +120,15 @@ export function calculateRoomSummary(room: RoomState): RoomSummary {
   const detourDistanceKm = activePassengers.reduce((total, passenger) => total + passenger.detourKm, 0)
   const actualDistanceKm = room.routeMetrics?.actualDistanceKm ?? room.settings.baseDistanceKm + detourDistanceKm
   const baseDistanceKm = room.routeMetrics?.baseDistanceKm ?? room.settings.baseDistanceKm
-  const baseTripCost = baseDistanceKm * fuelCostPerKm
-  const detourCost = detourDistanceKm * fuelCostPerKm
-  const totalTripCost = baseTripCost + detourCost + room.settings.tollCost
+  const baseTripCost = roundRupiah(baseDistanceKm * fuelCostPerKm)
+  const detourCost = roundRupiah(detourDistanceKm * fuelCostPerKm)
+  const totalTripCost = roundRupiah(baseTripCost + detourCost + room.settings.additionalCost)
   const peopleInCar = activePassengers.length + 1
-  const baseShare = peopleInCar > 0 ? (baseTripCost + room.settings.tollCost) / peopleInCar : 0
+  const baseShare = peopleInCar > 0 ? roundRupiah((baseTripCost + room.settings.additionalCost) / peopleInCar) : 0
   const driverShare = baseShare
 
   const passengerBills = activePassengers.map((passenger, index) => {
-    const detourShare = passenger.detourKm * fuelCostPerKm
+    const detourShare = roundRupiah(passenger.detourKm * fuelCostPerKm)
     return {
       id: passenger.id,
       name: passenger.name,
@@ -82,7 +138,7 @@ export function calculateRoomSummary(room: RoomState): RoomSummary {
       detourKm: passenger.detourKm,
       baseShare,
       detourShare,
-      total: baseShare + detourShare,
+      total: roundRupiah(baseShare + detourShare),
       order: index + 1,
     }
   })
@@ -99,7 +155,7 @@ export function calculateRoomSummary(room: RoomState): RoomSummary {
     actualDistanceKm,
     detourDistanceKm,
     fuelCostPerKm,
-    tollCost: room.settings.tollCost,
+    additionalCost: room.settings.additionalCost,
     activePassengers,
     passengerBills,
     baseShare,
@@ -119,17 +175,18 @@ export function roomShareUrl(roomCode: string) {
   return `${getPublicAppUrl()}/room/${roomCode.toUpperCase()}`
 }
 
-export function buildLedgerText(summary: RoomSummary) {
+export function buildLedgerText(summary: RoomSummary, routeReviewMessage?: string | null) {
   const lines = [
     "🚗 NEBENGNIH DAILY REPORT 🚗",
     `Date: ${formatDateLabel()}`,
     `Room: ${summary.roomCode}`,
     `Driver: ${summary.driverNickname}`,
     `Route: ${cleanLabel(summary.origin)} → ${cleanLabel(summary.destination)}`,
+    routeReviewMessage ? `Route Review: ${cleanText(routeReviewMessage)}` : null,
     "",
     "Pickup Route Sequence:",
     "-----------------------",
-  ]
+  ].filter((line): line is string => line !== null)
 
   if (summary.passengerBills.length === 0) {
     lines.push("No active passengers yet.")
@@ -148,9 +205,13 @@ export function buildLedgerText(summary: RoomSummary) {
     `Actual Distance: ${formatDistance(summary.actualDistanceKm)}`,
     `Detour Distance: ${formatDistance(summary.detourDistanceKm)}`,
     `Fuel Cost / km: ${formatMoney(summary.fuelCostPerKm)}`,
-    `Total Tolls: ${formatMoney(summary.tollCost)}`,
-    `Driver Share: ${formatMoney(summary.driverShare)}`,
-    "Settle via manual transfer to Driver.",
+    `Additional Cost: ${formatMoney(summary.additionalCost)}`,
+    routeReviewMessage
+      ? "Driver Share: Review required"
+      : `Driver Share: ${formatMoney(summary.driverShare)}`,
+    routeReviewMessage
+      ? "Settle after manual route review."
+      : "Settle via manual transfer to Driver.",
     "Drive safe! 🙏"
   )
 

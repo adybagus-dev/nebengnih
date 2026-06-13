@@ -18,6 +18,10 @@ export function DriverDashboardShell() {
   const [inviteOpen, setInviteOpen] = useState(false)
   const [navigationOpen, setNavigationOpen] = useState(false)
   const { room, summary, setRouteMetrics } = useRoom()
+  const routeReviewMessage =
+    room.routeMetrics?.routeStatus === "manual-review"
+      ? room.routeMetrics.validationMessage ?? "Route review needed."
+      : null
 
   useEffect(() => {
     let cancelled = false
@@ -47,7 +51,7 @@ export function DriverDashboardShell() {
   }, [room.settings, room.passengers])
 
   async function handleCopyLedger() {
-    const ledgerText = buildLedgerText(summary)
+    const ledgerText = buildLedgerText(summary, routeReviewMessage)
 
     try {
       await navigator.clipboard.writeText(ledgerText)

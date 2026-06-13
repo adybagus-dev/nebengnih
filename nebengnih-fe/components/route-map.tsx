@@ -66,6 +66,10 @@ export function RouteMap() {
   const routeLayersRef = useRef<import("leaflet").Layer[]>([])
   const [mapReady, setMapReady] = useState(false)
   const [routeComplete, setRouteComplete] = useState(true)
+  const routeReviewMessage =
+    room.routeMetrics?.routeStatus === "manual-review"
+      ? room.routeMetrics.validationMessage ?? "Route review needed."
+      : null
 
   const stops = useMemo(() => {
     const nextStops: RouteStop[] = []
@@ -302,28 +306,45 @@ export function RouteMap() {
   }, [mapReady, room.passengers, room.settings, stops])
 
   return (
-    <section className="px-4" aria-label="Driver and passenger route map">
-      <div className="relative isolate h-[42vh] min-h-[300px] overflow-hidden rounded-3xl border border-border bg-muted shadow-xl">
+    <section aria-label="Driver and passenger route map">
+      <div className="relative isolate h-[42vh] min-h-[300px] overflow-hidden border-y border-border bg-muted shadow-xl sm:rounded-3xl sm:border-x">
         <div
           ref={mapContainerRef}
           className="absolute inset-0 z-0"
           aria-label="Interactive map showing driver route and passenger pickups"
         />
 
-        <div className="pointer-events-none absolute right-3 top-3 z-[500] max-w-[12rem] rounded-2xl border border-white/80 bg-background/90 px-3 py-2 shadow-lg backdrop-blur-md">
+        <div
+          className={`pointer-events-none absolute right-3 top-3 z-[500] max-w-[12rem] rounded-2xl border px-3 py-2 shadow-lg backdrop-blur-md ${
+            routeReviewMessage
+              ? "border-amber-200 bg-amber-50/95"
+              : "border-white/80 bg-background/90"
+          }`}
+        >
           <div className="flex items-start gap-2">
             <Route
               className={`mt-0.5 size-4 shrink-0 ${
-                routeComplete ? "text-emerald-600" : "text-amber-600"
+                routeReviewMessage
+                  ? "text-amber-600"
+                  : routeComplete
+                    ? "text-emerald-600"
+                    : "text-amber-600"
               }`}
             />
             <div className="min-w-0">
               <p className="truncate text-xs font-bold text-foreground">
-                {routeComplete ? "Complete route" : "Needs destination"}
+                {routeReviewMessage
+                  ? "Route review needed"
+                  : routeComplete
+                    ? "Complete route"
+                    : "Needs destination"}
               </p>
               <p className="mt-0.5 text-[10px] leading-tight text-muted-foreground">
-                {summary.activePassengers.length} pickup
-                {summary.activePassengers.length === 1 ? "" : "s"}
+                {routeReviewMessage
+                  ? routeReviewMessage
+                  : `${summary.activePassengers.length} pickup${
+                      summary.activePassengers.length === 1 ? "" : "s"
+                    }`}
               </p>
             </div>
           </div>
@@ -333,14 +354,21 @@ export function RouteMap() {
               <span className="h-1 w-3 rounded-full bg-slate-500" />
               Direct
             </span>
-            <span className="flex items-center gap-1">
-              <span
-                className={`h-1 w-3 rounded-full ${
-                  routeComplete ? "bg-emerald-500" : "bg-amber-500"
-                }`}
-              />
-              Pickups
-            </span>
+            {routeReviewMessage ? (
+              <span className="flex items-center gap-1">
+                <span className="h-1 w-3 rounded-full bg-amber-500" />
+                Review
+              </span>
+            ) : (
+              <span className="flex items-center gap-1">
+                <span
+                  className={`h-1 w-3 rounded-full ${
+                    routeComplete ? "bg-emerald-500" : "bg-amber-500"
+                  }`}
+                />
+                Pickups
+              </span>
+            )}
           </div>
         </div>
 

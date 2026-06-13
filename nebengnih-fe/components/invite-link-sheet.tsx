@@ -13,9 +13,13 @@ interface InviteLinkSheetProps {
 }
 
 export function InviteLinkSheet({ open, onOpenChange }: InviteLinkSheetProps) {
-  const { summary } = useRoom()
+  const { room, summary } = useRoom()
   const router = useRouter()
   const [copied, setCopied] = useState(false)
+  const routeReviewMessage =
+    room.routeMetrics?.routeStatus === "manual-review"
+      ? room.routeMetrics.validationMessage ?? "Route review needed."
+      : null
 
   function handleCopy() {
     navigator.clipboard.writeText(summary.shareUrl).catch(() => {})
@@ -73,7 +77,7 @@ export function InviteLinkSheet({ open, onOpenChange }: InviteLinkSheetProps) {
                     Driver share
                   </p>
                   <p className="font-mono text-sm font-semibold text-foreground">
-                    {formatMoney(summary.driverShare)}
+                    {routeReviewMessage ? "Review required" : formatMoney(summary.driverShare)}
                   </p>
                 </div>
               </div>

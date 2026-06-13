@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
 import { normalizeRoomState } from "@/lib/room/state"
+import { validateRouteBeforeSave } from "@/lib/room/validation"
 import type { Passenger, RoomState } from "@/lib/room/types"
 
 type RoomRecord = {
@@ -115,6 +116,15 @@ export async function PATCH(
       ...room,
       passengers,
     }
+
+    const validation = await validateRouteBeforeSave(nextRoom.settings, passengers, "passenger")
+    if (!validation.allowed) {
+      return NextResponse.json(
+        { error: validation.message ?? "This pickup cannot be saved." },
+        { status: 400 }
+      )
+    }
+
     const { error: saveError } = await supabase
       .from("rooms")
       .update({ payload: nextRoom })

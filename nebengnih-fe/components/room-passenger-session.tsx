@@ -6,7 +6,12 @@ import { AttendanceToggle } from "@/components/attendance-toggle"
 import { PickupLocationPicker } from "@/components/pickup-location-picker"
 import { PickupMapPreview } from "@/components/pickup-map-preview"
 import { RoomHeader } from "@/components/room-header"
-import { calculateRoomSummary, estimateDetourKm } from "@/lib/room/calculations"
+import { RouteValidationSheet } from "@/components/route-validation-sheet"
+import { RouteSuccessSheet } from "@/components/route-success-sheet"
+import {
+  calculateRoomSummary,
+  estimatePickupDetourKm,
+} from "@/lib/room/calculations"
 import { createDefaultRoomState } from "@/lib/room/defaults"
 import { fetchRoom, persistPassenger, roomExists } from "@/lib/room/repository"
 import type { RoomState } from "@/lib/room/types"
@@ -39,6 +44,8 @@ export function RoomPassengerSession({ roomCode }: RoomPassengerSessionProps) {
   const [saving, setSaving] = useState(false)
   const [saveStatus, setSaveStatus] = useState<"idle" | "saved" | "error">("idle")
   const [saveError, setSaveError] = useState("")
+  const [validationOpen, setValidationOpen] = useState(false)
+  const [successOpen, setSuccessOpen] = useState(false)
   const [roomMissing, setRoomMissing] = useState(false)
   const [loadError, setLoadError] = useState("")
   const [passengerId] = useState(() => getPassengerId(normalizedCode))
@@ -104,7 +111,11 @@ export function RoomPassengerSession({ roomCode }: RoomPassengerSessionProps) {
   }, [saveStatus])
 
   const summary = useMemo(() => calculateRoomSummary(room), [room])
-  const estimatedDetourKm = estimateDetourKm(landmark)
+  const estimatedDetourKm = estimatePickupDetourKm(
+    room.settings,
+    pickupCoordinates,
+    landmark
+  )
   const estimatedShare = summary.baseShare + estimatedDetourKm * summary.fuelCostPerKm
 
   async function handleSave() {
@@ -126,9 +137,11 @@ export function RoomPassengerSession({ roomCode }: RoomPassengerSessionProps) {
       const persisted = await persistPassenger(normalizedCode, nextPassenger)
       setRoom(persisted)
       setSaveStatus("saved")
+      setSuccessOpen(true)
     } catch (error) {
       setSaveStatus("error")
       setSaveError(error instanceof Error ? error.message : "Failed to save your location status.")
+      setValidationOpen(true)
     } finally {
       setSaving(false)
     }
@@ -219,26 +232,6 @@ export function RoomPassengerSession({ roomCode }: RoomPassengerSessionProps) {
           estimatedShare={estimatedShare}
         />
         <AttendanceToggle joining={joining} onChange={setJoining} />
-        {saveStatus !== "idle" ? (
-          <section className="px-4 pt-4">
-            <div
-              className={`rounded-2xl border px-4 py-3 text-sm ${
-                saveStatus === "saved"
-                  ? "border-emerald-200 bg-emerald-50 text-emerald-900"
-                  : "border-rose-200 bg-rose-50 text-rose-900"
-              }`}
-            >
-              <p className="font-semibold">
-                {saveStatus === "saved" ? "Location status saved" : "Could not save location status"}
-              </p>
-              <p className="mt-1 text-xs leading-relaxed opacity-90">
-                {saveStatus === "saved"
-                  ? "Your pickup point and joining status are now stored for this room. You can keep checking the map or edit it again."
-                  : saveError || "Please check your connection and try again."}
-              </p>
-            </div>
-          </section>
-        ) : null}
         <div className="h-4" />
       </main>
 
@@ -253,6 +246,22 @@ export function RoomPassengerSession({ roomCode }: RoomPassengerSessionProps) {
           {saving ? "Saving..." : saveStatus === "saved" ? "Saved" : "Save My Location Status"}
         </button>
       </footer>
+
+      <RouteValidationSheet
+        open={validationOpen}
+        onOpenChange={setValidationOpen}
+        title="Pickup route not allowed"
+        message={saveError || "This pickup cannot be saved."}
+        actionLabel="Choose another pickup"
+      />
+
+      <RouteSuccessSheet
+        open={successOpen}
+        onOpenChange={setSuccessOpen}
+        title="Pickup saved"
+        message="Your pickup is now stored for this room."
+        actionLabel="Keep checking room"
+      />
     </div>
   )
 }

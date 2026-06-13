@@ -5,12 +5,18 @@ import { formatMoney } from "@/lib/room/calculations"
 
 export function RideStats() {
   const { room, summary } = useRoom()
+  const routeReviewMessage =
+    room.routeMetrics?.routeStatus === "manual-review"
+      ? room.routeMetrics.validationMessage ?? "Route review needed."
+      : null
   const routeStatusLabel = {
     idle: "Idle",
     loading: "Loading",
     ready: "Live",
     fallback: "Fallback",
+    "manual-review": "Review",
   }[room.routeMetrics?.routeStatus ?? "idle"]
+  const validationMessage = room.routeMetrics?.validationMessage
 
   return (
     <section className="px-4 pt-5" aria-label="Ride stats and settings">
@@ -28,8 +34,11 @@ export function RideStats() {
           title="Cost"
           rows={[
             { label: "Fuel rate", value: `${room.settings.fuelEfficiencyKmPerLiter.toFixed(1)} km/L` },
-            { label: "Tolls", value: formatMoney(summary.tollCost) },
-            { label: "Driver share", value: formatMoney(summary.driverShare) },
+            { label: "Additional cost", value: formatMoney(summary.additionalCost) },
+            {
+              label: "Driver share",
+              value: routeReviewMessage ? "Review required" : formatMoney(summary.driverShare),
+            },
           ]}
         />
       </div>
@@ -42,6 +51,12 @@ export function RideStats() {
           <span className="text-xs font-semibold text-muted-foreground">Route status</span>
           <span className="font-mono text-xs font-semibold text-foreground">{routeStatusLabel}</span>
         </div>
+        {validationMessage ? (
+          <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
+            <p className="text-xs font-semibold text-amber-900">Route review needed</p>
+            <p className="mt-0.5 text-xs leading-relaxed text-amber-800">{validationMessage}</p>
+          </div>
+        ) : null}
       </div>
     </section>
   )

@@ -17,12 +17,14 @@ export type RouteSettings = {
   destinationLng?: number
   fuelEfficiencyKmPerLiter: number
   fuelPricePerLiter: number
-  tollCost: number
+  additionalCost: number
   baseDistanceKm: number
 }
 
 export type RouteMetrics = {
-  routeStatus: "idle" | "loading" | "ready" | "fallback"
+  routeStatus: "idle" | "loading" | "ready" | "fallback" | "manual-review"
+  validationType?: "road" | "cross-water"
+  validationMessage?: string
   baseDistanceKm?: number
   actualDistanceKm?: number
   detourDistanceKm?: number
@@ -58,7 +60,7 @@ export type RoomSummary = {
   actualDistanceKm: number
   detourDistanceKm: number
   fuelCostPerKm: number
-  tollCost: number
+  additionalCost: number
   activePassengers: Passenger[]
   passengerBills: PassengerBill[]
   baseShare: number

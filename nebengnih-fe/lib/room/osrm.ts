@@ -26,6 +26,30 @@ function hasCoords(coord?: Coord | null): coord is Coord {
   return Boolean(coord && Number.isFinite(coord.lat) && Number.isFinite(coord.lng))
 }
 
+function toRadians(value: number) {
+  return (value * Math.PI) / 180
+}
+
+function haversineKm(start: Coord, end: Coord) {
+  const earthRadiusKm = 6371
+  const dLat = toRadians(end.lat - start.lat)
+  const dLng = toRadians(end.lng - start.lng)
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRadians(start.lat)) *
+      Math.cos(toRadians(end.lat)) *
+      Math.sin(dLng / 2) ** 2
+
+  return earthRadiusKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+}
+
+function routeDistanceKm(points: Coord[]) {
+  return points.slice(1).reduce((total, point, index) => {
+    const prev = points[index]
+    return total + haversineKm(prev, point)
+  }, 0)
+}
+
 function routePoints(settings: RouteSettings, passengers: Passenger[]) {
   const origin = hasCoords({ lat: settings.originLat ?? NaN, lng: settings.originLng ?? NaN })
     ? { lat: settings.originLat as number, lng: settings.originLng as number }
@@ -63,6 +87,34 @@ async function fetchGeometry(points: Coord[]) {
   const json = (await response.json()) as RouteResponse
   return (json.routes?.[0]?.geometry?.coordinates ?? []).map(
     ([lng, lat]) => ({ lat, lng })
+  )
+}
+
+function needsCrossWaterFallback(params: {
+  baseRoadDistanceKm: number | null
+  actualRoadDistanceKm: number | null
+  baseGeodesicDistanceKm: number
+  actualGeodesicDistanceKm: number
+}) {
+  const { baseRoadDistanceKm, actualRoadDistanceKm, baseGeodesicDistanceKm, actualGeodesicDistanceKm } = params
+
+  if (!Number.isFinite(baseGeodesicDistanceKm) || baseGeodesicDistanceKm <= 0) return false
+  if (!Number.isFinite(actualGeodesicDistanceKm) || actualGeodesicDistanceKm <= 0) return false
+  if (baseRoadDistanceKm === null || actualRoadDistanceKm === null) return true
+
+  const baseRatio = baseRoadDistanceKm / baseGeodesicDistanceKm
+  const actualRatio = actualRoadDistanceKm / actualGeodesicDistanceKm
+  const baseGapKm = baseRoadDistanceKm - baseGeodesicDistanceKm
+  const actualGapKm = actualRoadDistanceKm - actualGeodesicDistanceKm
+
+  const ratioThreshold = actualGeodesicDistanceKm >= 15 ? 1.45 : 1.6
+  const gapThreshold = actualGeodesicDistanceKm >= 15 ? 8 : 5
+
+  return (
+    baseRatio > ratioThreshold ||
+    actualRatio > ratioThreshold ||
+    baseGapKm > gapThreshold ||
+    actualGapKm > gapThreshold
   )
 }
 
@@ -109,6 +161,8 @@ export async function fetchRouteMetrics(settings: RouteSettings, passengers: Pas
   const coordinates = [origin, ...pickups, destination]
     .map((coord) => `${coord.lng},${coord.lat}`)
     .join(";")
+  const geodesicBaseKm = routeDistanceKm([origin, destination])
+  const geodesicActualKm = routeDistanceKm([origin, ...pickups, destination])
 
   try {
     const response = await fetch(
@@ -138,18 +192,46 @@ export async function fetchRouteMetrics(settings: RouteSettings, passengers: Pas
       ? baseDistanceMeters / 1000
       : settings.baseDistanceKm
 
+    if (
+      needsCrossWaterFallback({
+        baseRoadDistanceKm: baseDistanceKm,
+        actualRoadDistanceKm: actualDistanceKm,
+        baseGeodesicDistanceKm: geodesicBaseKm,
+        actualGeodesicDistanceKm: geodesicActualKm,
+      })
+    ) {
+      return {
+        routeStatus: "manual-review" as const,
+        validationType: "cross-water" as const,
+        validationMessage: "This route crosses water or another island. Please choose another route on the same island.",
+        baseDistanceKm: Math.max(settings.baseDistanceKm, geodesicBaseKm * 2.2),
+        actualDistanceKm: Math.max(settings.baseDistanceKm, geodesicActualKm * 2.2),
+        detourDistanceKm: Math.max(
+          0,
+          Math.max(settings.baseDistanceKm, geodesicActualKm * 2.2) -
+            Math.max(settings.baseDistanceKm, geodesicBaseKm * 2.2)
+        ),
+      }
+    }
+
     return {
       routeStatus: "ready" as const,
+      validationType: "road" as const,
       baseDistanceKm,
       actualDistanceKm,
       detourDistanceKm: Math.max(0, actualDistanceKm - baseDistanceKm),
+      validationMessage: undefined,
     }
   } catch {
-    const detourDistanceKm = pickups.length * 1.2
+    const manualBaseDistanceKm = Math.max(settings.baseDistanceKm, geodesicBaseKm * 2.2)
+    const manualActualDistanceKm = Math.max(manualBaseDistanceKm, geodesicActualKm * 2.2)
+    const detourDistanceKm = Math.max(0, manualActualDistanceKm - manualBaseDistanceKm)
     return {
       routeStatus: "fallback" as const,
-      baseDistanceKm: settings.baseDistanceKm,
-      actualDistanceKm: settings.baseDistanceKm + detourDistanceKm,
+      validationType: "road" as const,
+      validationMessage: undefined,
+      baseDistanceKm: manualBaseDistanceKm,
+      actualDistanceKm: manualActualDistanceKm,
       detourDistanceKm,
     }
   }

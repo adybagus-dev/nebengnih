@@ -3,7 +3,7 @@ import type { RoomState } from "./types"
 export function createDefaultRoomState(roomCode = ""): RoomState {
   return {
     roomCode,
-    driverNickname: "Driver",
+    driverNickname: "",
     settings: {
       origin: "",
       destination: "",
@@ -11,9 +11,9 @@ export function createDefaultRoomState(roomCode = ""): RoomState {
       originLng: undefined,
       destinationLat: undefined,
       destinationLng: undefined,
-      fuelEfficiencyKmPerLiter: 10,
-      fuelPricePerLiter: 12500,
-      tollCost: 20000,
+      fuelEfficiencyKmPerLiter: 0,
+      fuelPricePerLiter: 0,
+      additionalCost: 0,
       baseDistanceKm: 0,
     },
     passengers: [],

@@ -53,6 +53,8 @@ function roomSignature(room: RoomState) {
     routeMetrics: room.routeMetrics
       ? {
           routeStatus: room.routeMetrics.routeStatus,
+          validationType: room.routeMetrics.validationType,
+          validationMessage: room.routeMetrics.validationMessage,
           baseDistanceKm: room.routeMetrics.baseDistanceKm,
           actualDistanceKm: room.routeMetrics.actualDistanceKm,
           detourDistanceKm: room.routeMetrics.detourDistanceKm,
@@ -244,7 +246,16 @@ export function RoomProvider({
     if (roomSignatureRef.current === nextSignature) return
     roomSignatureRef.current = nextSignature
 
-    void persistRoom(room, { trackAsDriver: trackAsDriverRef.current }).catch(console.error)
+    void persistRoom(room, { trackAsDriver: trackAsDriverRef.current }).catch((error) => {
+      if (
+        error instanceof Error &&
+        error.message.includes("crosses water or another island")
+      ) {
+        return
+      }
+
+      console.error(error)
+    })
   }, [hydrated, room])
 
   const summary = useMemo(() => calculateRoomSummary(room), [room])

@@ -6,29 +6,53 @@ import { useRouter } from "next/navigation"
 import { AppHeader } from "@/components/app-header"
 import { PickupLocationPicker } from "@/components/pickup-location-picker"
 import { PickupMapPreview } from "@/components/pickup-map-preview"
-import { estimateDetourKm } from "@/lib/room/calculations"
+import { estimatePickupDetourKm } from "@/lib/room/calculations"
+import { RouteValidationSheet } from "@/components/route-validation-sheet"
+import { validateRouteBeforeSave } from "@/lib/room/validation"
 import { useRoom } from "@/components/providers/room-provider"
 
 export function AddSpotSession() {
   const router = useRouter()
-  const { summary, upsertPassenger } = useRoom()
+  const { room, summary, upsertPassenger } = useRoom()
   const [passengerName, setPassengerName] = useState("")
   const [landmark, setLandmark] = useState("Current location")
+  const [saveError, setSaveError] = useState("")
+  const [validationOpen, setValidationOpen] = useState(false)
   const [pickupCoordinates, setPickupCoordinates] = useState({
     lat: -6.5987,
     lng: 106.799,
   })
+  const estimatedDetourKm = estimatePickupDetourKm(
+    room.settings,
+    pickupCoordinates,
+    landmark
+  )
 
-  function handleConfirm() {
-    upsertPassenger({
+  async function handleConfirm() {
+    const passenger = {
       id: `manual-${crypto.randomUUID()}`,
       name: passengerName.trim() || "Guest",
       pickupLandmark: landmark.trim() || "Nearby landmark",
       pickupLat: pickupCoordinates.lat,
       pickupLng: pickupCoordinates.lng,
-      detourKm: estimateDetourKm(landmark),
+      detourKm: estimatedDetourKm,
       joiningToday: true,
-    })
+    }
+
+    const validation = await validateRouteBeforeSave(
+      room.settings,
+      [...room.passengers, passenger],
+      "passenger"
+    )
+
+    if (!validation.allowed) {
+      setSaveError(validation.message ?? "This pickup cannot be saved.")
+      setValidationOpen(true)
+      return
+    }
+
+    setSaveError("")
+    upsertPassenger(passenger)
     router.push(`/driver/${summary.roomCode}`)
   }
 
@@ -65,8 +89,8 @@ export function AddSpotSession() {
         />
         <PickupLocationPicker
           landmark={landmark}
-          estimatedDetourKm={estimateDetourKm(landmark)}
-          estimatedShare={0}
+          estimatedDetourKm={estimatedDetourKm}
+          estimatedShare={summary.baseShare + estimatedDetourKm * summary.fuelCostPerKm}
         />
 
         <div className="h-4" />
@@ -75,13 +99,21 @@ export function AddSpotSession() {
       <footer className="fixed inset-x-0 bottom-0 z-20 mx-auto max-w-md border-t border-border bg-background/80 px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur-lg">
         <button
           type="button"
-          onClick={handleConfirm}
+          onClick={() => void handleConfirm()}
           className="flex w-full items-center justify-center gap-2 rounded-2xl bg-primary py-4 text-base font-bold text-primary-foreground shadow-lg shadow-primary/25 transition-transform active:scale-[0.98]"
         >
           <CheckSquare className="size-5" />
           Confirm &amp; Add to Lineup
         </button>
       </footer>
+
+      <RouteValidationSheet
+        open={validationOpen}
+        onOpenChange={setValidationOpen}
+        title="Pickup crosses water"
+        message={saveError}
+        actionLabel="Choose another pickup"
+      />
     </div>
   )
 }

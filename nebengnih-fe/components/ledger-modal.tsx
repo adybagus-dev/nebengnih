@@ -11,9 +11,13 @@ interface LedgerModalProps {
 }
 
 export function LedgerModal({ open, onClose }: LedgerModalProps) {
-  const { summary } = useRoom()
+  const { room, summary } = useRoom()
 
-  const ledgerPreview = buildLedgerText(summary)
+  const routeReviewMessage =
+    room.routeMetrics?.routeStatus === "manual-review"
+      ? room.routeMetrics.validationMessage ?? "Route review needed."
+      : null
+  const ledgerPreview = buildLedgerText(summary, routeReviewMessage)
 
   return (
     <Sheet open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()}>

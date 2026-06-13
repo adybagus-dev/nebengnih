@@ -12,6 +12,7 @@ export function normalizeRoomState(roomCode: string, value: Partial<RoomState>):
     settings: {
       ...defaults.settings,
       ...(value.settings ?? {}),
+      additionalCost: value.settings?.additionalCost ?? defaults.settings.additionalCost,
     },
     passengers: Array.isArray(value.passengers)
       ? value.passengers.map((passenger) => ({
@@ -25,6 +26,8 @@ export function normalizeRoomState(roomCode: string, value: Partial<RoomState>):
     routeMetrics: value.routeMetrics
       ? {
           routeStatus: value.routeMetrics.routeStatus ?? "idle",
+          validationType: value.routeMetrics.validationType,
+          validationMessage: value.routeMetrics.validationMessage,
           baseDistanceKm: value.routeMetrics.baseDistanceKm,
           actualDistanceKm: value.routeMetrics.actualDistanceKm,
           detourDistanceKm: value.routeMetrics.detourDistanceKm,

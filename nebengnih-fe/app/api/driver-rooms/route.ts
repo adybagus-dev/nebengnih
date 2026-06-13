@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto"
 import { NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
+import { validateRouteBeforeSave } from "@/lib/room/validation"
 
 const COOKIE_NAME = "nebengnih-driver-session"
 
@@ -104,6 +105,37 @@ export async function POST(request: Request) {
     const body = (await request.json()) as { roomCode?: string; payload?: unknown }
     if (!body.roomCode || !body.payload) {
       return NextResponse.json({ error: "Missing roomCode or payload" }, { status: 400 })
+    }
+
+    const payload = body.payload as {
+      settings?: {
+        originLat?: number
+        originLng?: number
+        destinationLat?: number
+        destinationLng?: number
+      }
+      passengers?: { id: string; name: string; pickupLandmark: string; pickupLat?: number; pickupLng?: number; detourKm: number; joiningToday: boolean }[]
+    }
+
+    const validation = await validateRouteBeforeSave(
+      {
+        origin: "",
+        destination: "",
+        originLat: payload.settings?.originLat,
+        originLng: payload.settings?.originLng,
+        destinationLat: payload.settings?.destinationLat,
+        destinationLng: payload.settings?.destinationLng,
+        fuelEfficiencyKmPerLiter: 10,
+        fuelPricePerLiter: 12500,
+        additionalCost: 0,
+        baseDistanceKm: 0,
+      },
+      payload.passengers ?? [],
+      "driver"
+    )
+
+    if (!validation.allowed) {
+      return NextResponse.json({ error: validation.message ?? "This route cannot be saved." }, { status: 400 })
     }
 
     const { error } = await supabase.from("rooms").upsert(

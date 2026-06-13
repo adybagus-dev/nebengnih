@@ -23,7 +23,7 @@ export function SettingsSheet({ open, onOpenChange }: SettingsSheetProps) {
   const [destination, setDestination] = useState(room.settings.destination)
   const [fuelEfficiency, setFuelEfficiency] = useState(String(room.settings.fuelEfficiencyKmPerLiter))
   const [fuelPrice, setFuelPrice] = useState(String(room.settings.fuelPricePerLiter))
-  const [tollCosts, setTollCosts] = useState(String(room.settings.tollCost))
+  const [additionalCost, setAdditionalCost] = useState(String(room.settings.additionalCost))
   const [baseDistance, setBaseDistance] = useState(String(room.settings.baseDistanceKm))
 
   useEffect(() => {
@@ -33,7 +33,7 @@ export function SettingsSheet({ open, onOpenChange }: SettingsSheetProps) {
     setDestination(room.settings.destination)
     setFuelEfficiency(String(room.settings.fuelEfficiencyKmPerLiter))
     setFuelPrice(String(room.settings.fuelPricePerLiter))
-    setTollCosts(String(room.settings.tollCost))
+    setAdditionalCost(String(room.settings.additionalCost))
     setBaseDistance(String(room.settings.baseDistanceKm))
   }, [open, room])
 
@@ -44,7 +44,7 @@ export function SettingsSheet({ open, onOpenChange }: SettingsSheetProps) {
       destination: destination.trim(),
       fuelEfficiencyKmPerLiter: Number(fuelEfficiency) || 1,
       fuelPricePerLiter: Number(fuelPrice) || 0,
-      tollCost: Number(tollCosts) || 0,
+      additionalCost: Number(additionalCost) || 0,
       baseDistanceKm: Number(baseDistance) || 0,
     })
     onOpenChange(false)
@@ -187,14 +187,14 @@ export function SettingsSheet({ open, onOpenChange }: SettingsSheetProps) {
             </div>
           </fieldset>
 
-          {/* Tolls */}
+          {/* Additional cost */}
           <fieldset className="mb-6">
             <legend className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Daily Tolls
+              Additional Cost
             </legend>
             <div className="flex flex-col gap-1.5">
               <label htmlFor="toll-costs" className="text-sm font-medium text-foreground">
-                Daily Toll Costs Total
+                Additional Cost Total
               </label>
               <div className="flex overflow-hidden rounded-xl border border-border bg-background focus-within:ring-2 focus-within:ring-ring">
                 <span className="flex items-center bg-secondary px-3 text-xs font-semibold text-muted-foreground">
@@ -204,8 +204,8 @@ export function SettingsSheet({ open, onOpenChange }: SettingsSheetProps) {
                   id="toll-costs"
                   type="number"
                   min="0"
-                  value={tollCosts}
-                  onChange={(e) => setTollCosts(e.target.value)}
+                  value={additionalCost}
+                  onChange={(e) => setAdditionalCost(e.target.value)}
                   className="min-w-0 flex-1 bg-transparent px-3 py-3 text-sm font-mono text-foreground focus:outline-none"
                 />
               </div>

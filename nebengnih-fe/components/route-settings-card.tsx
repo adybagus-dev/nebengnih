@@ -12,10 +12,19 @@ function toCoordinates(lat?: number, lng?: number) {
 export function RouteSettingsCard() {
   const { room, setDriverNickname, updateSettings } = useRoom()
   const [driverNickname, setDriverNicknameInput] = useState(room.driverNickname)
+  const [fuelEfficiency, setFuelEfficiency] = useState("")
+  const [fuelPrice, setFuelPrice] = useState("")
+  const [additionalCost, setAdditionalCost] = useState("")
 
   useEffect(() => {
     setDriverNicknameInput(room.driverNickname)
   }, [room.driverNickname])
+
+  useEffect(() => {
+    setFuelEfficiency(room.settings.fuelEfficiencyKmPerLiter > 0 ? String(room.settings.fuelEfficiencyKmPerLiter) : "")
+    setFuelPrice(room.settings.fuelPricePerLiter > 0 ? String(room.settings.fuelPricePerLiter) : "")
+    setAdditionalCost(room.settings.additionalCost > 0 ? String(room.settings.additionalCost) : "")
+  }, [room.settings.fuelEfficiencyKmPerLiter, room.settings.fuelPricePerLiter, room.settings.additionalCost])
 
   return (
     <>
@@ -28,9 +37,12 @@ export function RouteSettingsCard() {
             id="driver-nickname"
             type="text"
             value={driverNickname}
-            onChange={(event) => setDriverNicknameInput(event.target.value)}
-            onBlur={() => setDriverNickname(driverNickname.trim() || "Driver")}
-            placeholder="Enter your name (e.g., Bang Andi)"
+            onChange={(event) => {
+              const nextValue = event.target.value
+              setDriverNicknameInput(nextValue)
+              setDriverNickname(nextValue.trim())
+            }}
+            placeholder="Enter your name"
             className="w-full bg-transparent text-base font-medium text-foreground outline-none placeholder:text-muted-foreground"
           />
         </div>
@@ -86,18 +98,20 @@ export function RouteSettingsCard() {
                 Fuel Efficiency
               </label>
               <div className="flex overflow-hidden rounded-xl border border-input bg-background focus-within:ring-2 focus-within:ring-ring">
-                <input
+                  <input
                   id="route-fuel-efficiency"
                   type="number"
                   inputMode="decimal"
                   min="1"
                   step="0.1"
-                  value={room.settings.fuelEfficiencyKmPerLiter}
-                  onChange={(event) =>
+                  value={fuelEfficiency}
+                  onChange={(event) => {
+                    const nextValue = event.target.value
+                    setFuelEfficiency(nextValue)
                     updateSettings({
-                      fuelEfficiencyKmPerLiter: Math.max(1, Number(event.target.value) || 1),
+                      fuelEfficiencyKmPerLiter: nextValue ? Math.max(1, Number(nextValue) || 1) : 0,
                     })
-                  }
+                  }}
                   className="min-w-0 flex-1 bg-transparent px-3 py-3 font-mono text-sm text-foreground outline-none"
                 />
                 <span className="flex items-center bg-secondary px-2.5 text-xs font-semibold text-muted-foreground">
@@ -120,12 +134,14 @@ export function RouteSettingsCard() {
                   inputMode="numeric"
                   min="0"
                   step="500"
-                  value={room.settings.fuelPricePerLiter}
-                  onChange={(event) =>
+                  value={fuelPrice}
+                  onChange={(event) => {
+                    const nextValue = event.target.value
+                    setFuelPrice(nextValue)
                     updateSettings({
-                      fuelPricePerLiter: Math.max(0, Number(event.target.value) || 0),
+                      fuelPricePerLiter: nextValue ? Math.max(0, Number(nextValue) || 0) : 0,
                     })
-                  }
+                  }}
                   className="min-w-0 flex-1 bg-transparent px-3 py-3 font-mono text-sm text-foreground outline-none"
                 />
               </div>
@@ -134,7 +150,7 @@ export function RouteSettingsCard() {
 
           <div className="mt-3 flex flex-col gap-1.5">
             <label htmlFor="route-toll-cost" className="text-sm font-medium text-foreground">
-              Daily Toll Cost
+              Additional Cost
             </label>
             <div className="flex overflow-hidden rounded-xl border border-input bg-background focus-within:ring-2 focus-within:ring-ring">
               <span className="flex items-center bg-secondary px-3 text-xs font-semibold text-muted-foreground">
@@ -146,12 +162,14 @@ export function RouteSettingsCard() {
                 inputMode="numeric"
                 min="0"
                 step="1000"
-                value={room.settings.tollCost}
-                onChange={(event) =>
+                value={additionalCost}
+                onChange={(event) => {
+                  const nextValue = event.target.value
+                  setAdditionalCost(nextValue)
                   updateSettings({
-                    tollCost: Math.max(0, Number(event.target.value) || 0),
+                    additionalCost: nextValue ? Math.max(0, Number(nextValue) || 0) : 0,
                   })
-                }
+                }}
                 className="min-w-0 flex-1 bg-transparent px-3 py-3 font-mono text-sm text-foreground outline-none"
               />
             </div>

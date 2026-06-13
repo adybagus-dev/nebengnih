@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js"
 import { normalizeRoomState } from "./state"
+import { validateRouteBeforeSave } from "./validation"
 import { getRoomStorageKey, loadRoomState, saveRoomState } from "./storage"
 import type { Passenger, RoomState } from "./types"
 
@@ -76,6 +77,11 @@ export async function persistRoom(
   room: RoomState,
   options?: { trackAsDriver?: boolean }
 ): Promise<RoomState> {
+  const validation = await validateRouteBeforeSave(room.settings, room.passengers, "driver")
+  if (!validation.allowed) {
+    throw new Error(validation.message ?? "This route cannot be saved.")
+  }
+
   const supabase = supabaseClient
   if (!supabase) {
     saveRoomState(room, options)
