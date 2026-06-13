@@ -9,6 +9,7 @@ import { PickupMapPreview } from "@/components/pickup-map-preview"
 import { estimatePickupDetourKm } from "@/lib/room/calculations"
 import { RouteValidationSheet } from "@/components/route-validation-sheet"
 import { validateRouteBeforeSave } from "@/lib/room/validation"
+import { persistPassenger } from "@/lib/room/repository"
 import { useRoom } from "@/components/providers/room-provider"
 
 export function AddSpotSession() {
@@ -18,6 +19,7 @@ export function AddSpotSession() {
   const [landmark, setLandmark] = useState("Current location")
   const [saveError, setSaveError] = useState("")
   const [validationOpen, setValidationOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
   const [pickupCoordinates, setPickupCoordinates] = useState({
     lat: -6.5987,
     lng: 106.799,
@@ -29,6 +31,8 @@ export function AddSpotSession() {
   )
 
   async function handleConfirm() {
+    if (saving) return
+
     const passenger = {
       id: `manual-${crypto.randomUUID()}`,
       name: passengerName.trim() || "Guest",
@@ -45,15 +49,25 @@ export function AddSpotSession() {
       "passenger"
     )
 
-    if (!validation.allowed) {
+      if (!validation.allowed) {
       setSaveError(validation.message ?? "This pickup cannot be saved.")
       setValidationOpen(true)
       return
     }
 
+    setSaving(true)
     setSaveError("")
-    upsertPassenger(passenger)
-    router.push(`/driver/${summary.roomCode}`)
+
+    try {
+      await persistPassenger(summary.roomCode, passenger)
+      upsertPassenger(passenger)
+      router.push(`/driver/${summary.roomCode}`)
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "This pickup cannot be saved.")
+      setValidationOpen(true)
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -99,11 +113,12 @@ export function AddSpotSession() {
       <footer className="fixed inset-x-0 bottom-0 z-20 mx-auto max-w-md border-t border-border bg-background/80 px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur-lg">
         <button
           type="button"
+          disabled={saving}
           onClick={() => void handleConfirm()}
-          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-primary py-4 text-base font-bold text-primary-foreground shadow-lg shadow-primary/25 transition-transform active:scale-[0.98]"
+          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-primary py-4 text-base font-bold text-primary-foreground shadow-lg shadow-primary/25 transition-transform active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70"
         >
           <CheckSquare className="size-5" />
-          Confirm &amp; Add to Lineup
+          {saving ? "Saving..." : "Confirm & Add to Lineup"}
         </button>
       </footer>
 
