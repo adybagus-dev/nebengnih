@@ -6,13 +6,15 @@ import { formatMoney } from "@/lib/room/calculations"
 interface PickupLocationPickerProps {
   landmark: string
   estimatedDetourKm: number
-  estimatedShare: number
+  estimatedShare?: number
+  showEstimatedShare?: boolean
 }
 
 export function PickupLocationPicker({
   landmark,
   estimatedDetourKm,
   estimatedShare,
+  showEstimatedShare = true,
 }: PickupLocationPickerProps) {
   return (
     <section className="px-4 pt-5">
@@ -29,19 +31,21 @@ export function PickupLocationPicker({
           </p>
         </div>
 
-        <div className="mt-3 grid grid-cols-2 gap-3">
+        <div className={`mt-3 grid gap-3 ${showEstimatedShare ? "grid-cols-2" : "grid-cols-1"}`}>
           <div className="rounded-xl border border-primary/20 bg-primary/5 px-3 py-3">
             <p className="mb-1 text-xs text-muted-foreground">Est. Detour</p>
             <p className="text-2xl font-bold leading-none text-primary">+{estimatedDetourKm.toFixed(1)} km</p>
           </div>
-          <div className="rounded-xl border border-border bg-secondary px-3 py-3">
-            <p className="mb-1 text-xs text-muted-foreground">Your Share</p>
-            <p className="text-2xl font-bold leading-none text-foreground">{formatMoney(estimatedShare)}</p>
-          </div>
+          {showEstimatedShare && typeof estimatedShare === "number" ? (
+            <div className="rounded-xl border border-border bg-secondary px-3 py-3">
+              <p className="mb-1 text-xs text-muted-foreground">Your Share</p>
+              <p className="text-2xl font-bold leading-none text-foreground">{formatMoney(estimatedShare)}</p>
+            </div>
+          ) : null}
         </div>
 
         <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
-          Final cost adjusts dynamically based on the total number of active passengers joining the ride today.
+          Final cost adjusts when the room is ready. For now, we only save your pickup and detour.
         </p>
       </div>
 

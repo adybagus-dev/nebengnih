@@ -66,6 +66,7 @@ export function RouteMap() {
   const routeLayersRef = useRef<import("leaflet").Layer[]>([])
   const [mapReady, setMapReady] = useState(false)
   const [routeComplete, setRouteComplete] = useState(true)
+  const [locating, setLocating] = useState(false)
   const routeReviewMessage =
     room.routeMetrics?.routeStatus === "manual-review"
       ? room.routeMetrics.validationMessage ?? "Route review needed."
@@ -317,6 +318,31 @@ export function RouteMap() {
       cancelled = true
     }
   }, [mapReady, room.passengers, room.settings, stops])
+
+  async function moveToCurrentLocation() {
+    if (locating || !("geolocation" in navigator)) return
+
+    setLocating(true)
+
+    try {
+      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 60000,
+        })
+      })
+
+      const map = mapRef.current
+      if (map) {
+        map.flyTo([position.coords.latitude, position.coords.longitude], Math.max(map.getZoom(), 15), {
+          duration: 0.8,
+        })
+      }
+    } finally {
+      setLocating(false)
+    }
+  }
 
   return (
     <section aria-label="Driver and passenger route map">

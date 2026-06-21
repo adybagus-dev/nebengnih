@@ -1,10 +1,9 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { ChevronRight, Lightbulb, MapPin, Search } from "lucide-react"
+import { ChevronRight, Crosshair, Lightbulb, MapPin, Search } from "lucide-react"
 
 // Bogor neighborhood near an Indomaret
-const DEFAULT_CENTER: [number, number] = [-6.5984, 106.7988]
 const INDOMARET_COORDS: [number, number] = [-6.5981, 106.7993]
 const PIN_COORDS: [number, number] = [-6.5987, 106.799]
 
@@ -58,7 +57,7 @@ export function PickupMapPreview({
   const manualChangeRef = useRef(false)
   const locationRequestedRef = useRef(false)
   const initialPosition = initialCoordinates ?? { lat: PIN_COORDS[0], lng: PIN_COORDS[1] }
-  const initialPositionRef = useRef(initialPosition)
+  const coordinatesRef = useRef(initialPosition)
   const [coordinates, setCoordinates] = useState(initialPosition)
   const [geoStatus, setGeoStatus] = useState<"idle" | "loading" | "ready" | "denied" | "unsupported">("idle")
   const [geoMessage, setGeoMessage] = useState("")
@@ -78,6 +77,10 @@ export function PickupMapPreview({
   useEffect(() => {
     setSearchText(landmark)
   }, [landmark])
+
+  useEffect(() => {
+    coordinatesRef.current = coordinates
+  }, [coordinates])
 
   useEffect(() => {
     if (!enableCurrentLocation) {
@@ -155,8 +158,9 @@ export function PickupMapPreview({
         shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
       })
 
+      const latestPosition = coordinatesRef.current
       const map = L.map(mapRef.current!, {
-        center: DEFAULT_CENTER,
+        center: [latestPosition.lat, latestPosition.lng],
         zoom: 17,
         zoomControl: false,
         attributionControl: false,
@@ -231,8 +235,7 @@ export function PickupMapPreview({
         }
       }
 
-      const initialPosition = initialPositionRef.current
-      const pinMarker = L.marker([initialPosition.lat, initialPosition.lng], {
+      const pinMarker = L.marker([latestPosition.lat, latestPosition.lng], {
         icon: makePinIcon(),
         draggable: true,
       }).addTo(map)
@@ -398,11 +401,76 @@ export function PickupMapPreview({
           ) : null}
         </div>
 
-        <div
-          ref={mapRef}
-          className={compact ? "h-[16rem] w-full bg-muted sm:h-[18rem]" : "h-[21rem] w-full bg-muted sm:h-[24rem]"}
-          aria-label="Pickup location map"
-        />
+        <div className="relative">
+          <div
+            ref={mapRef}
+            className={compact ? "h-[16rem] w-full bg-muted sm:h-[18rem]" : "h-[21rem] w-full bg-muted sm:h-[24rem]"}
+            aria-label="Pickup location map"
+          />
+
+          {enableCurrentLocation ? (
+            <button
+              type="button"
+              onClick={() => {
+                if (geoStatus === "loading") return
+                if ("geolocation" in navigator) {
+                  setGeoStatus("loading")
+                  setGeoMessage("Finding your current location...")
+                }
+                navigator.geolocation.getCurrentPosition(
+                  (position) => {
+                    const nextCoordinates = {
+                      lat: position.coords.latitude,
+                      lng: position.coords.longitude,
+                    }
+
+                    setCoordinates(nextCoordinates)
+                    onCoordinatesChangeRef.current?.(nextCoordinates)
+
+                    const map = mapInstanceRef.current
+                    const pinMarker = pinMarkerRef.current
+                    if (map && pinMarker) {
+                      pinMarker.setLatLng([nextCoordinates.lat, nextCoordinates.lng])
+                      map.flyTo([nextCoordinates.lat, nextCoordinates.lng], Math.max(map.getZoom(), 17), {
+                        animate: true,
+                        duration: 0.7,
+                      })
+                    }
+
+                    void (async () => {
+                      const address = await reverseGeocode(nextCoordinates.lat, nextCoordinates.lng)
+                      if (address) {
+                        setSearchText(address)
+                        onLandmarkChangeRef.current?.(address)
+                      } else {
+                        setSearchText("Current location")
+                        onLandmarkChangeRef.current?.("Current location")
+                      }
+                    })()
+
+                    setGeoStatus("ready")
+                    setGeoMessage("Current location is on. We moved the map to your position.")
+                  },
+                  () => {
+                    setGeoStatus("denied")
+                    setGeoMessage("Turn on location to use your current spot. You can still place the pin manually.")
+                  },
+                  {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 60000,
+                  }
+                )
+              }}
+              disabled={geoStatus === "loading"}
+              aria-label="Use my location"
+              title="Use my location"
+              className="absolute bottom-3 right-3 z-[700] flex size-11 items-center justify-center rounded-full border border-white/80 bg-background/95 text-foreground shadow-lg shadow-black/10 backdrop-blur-md transition-transform active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              <Crosshair className="size-5 text-primary" />
+            </button>
+          ) : null}
+        </div>
 
         {compact ? null : (
           <div className="flex items-start gap-2 border-t border-border bg-card px-4 py-3">

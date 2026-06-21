@@ -104,7 +104,7 @@ export function AddSpotSession() {
         <PickupLocationPicker
           landmark={landmark}
           estimatedDetourKm={estimatedDetourKm}
-          estimatedShare={summary.baseShare + estimatedDetourKm * summary.fuelCostPerKm}
+          showEstimatedShare={false}
         />
 
         <div className="h-4" />
