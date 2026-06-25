@@ -6,11 +6,6 @@ function formatCurrency(amount: number) {
   }).format(Math.round(amount))
 }
 
-function formatDistance(distance: number) {
-  const rounded = Math.round(distance * 10) / 10
-  return Number.isInteger(rounded) ? `${rounded.toFixed(0)} km` : `${rounded.toFixed(1)} km`
-}
-
 function formatDateLabel() {
   return new Date().toLocaleDateString("en-US", {
     weekday: "long",
@@ -18,14 +13,6 @@ function formatDateLabel() {
     month: "long",
     day: "numeric",
   })
-}
-
-function cleanLabel(value: string) {
-  return value
-    .split(",")
-    .map((part) => part.trim())
-    .filter(Boolean)
-    .join(", ")
 }
 
 function cleanText(value: string) {
@@ -177,15 +164,12 @@ export function roomShareUrl(roomCode: string) {
 
 export function buildLedgerText(summary: RoomSummary, routeReviewMessage?: string | null) {
   const lines = [
-    "🚗 NEBENGNIH DAILY REPORT 🚗",
-    `Date: ${formatDateLabel()}`,
+    "NebengNih Cost Split",
     `Room: ${summary.roomCode}`,
     `Driver: ${summary.driverNickname}`,
-    `Route: ${cleanLabel(summary.origin)} → ${cleanLabel(summary.destination)}`,
-    routeReviewMessage ? `Route Review: ${cleanText(routeReviewMessage)}` : null,
+    `Date: ${formatDateLabel()}`,
     "",
-    "Pickup Route Sequence:",
-    "-----------------------",
+    "Passenger payment:",
   ].filter((line): line is string => line !== null)
 
   if (summary.passengerBills.length === 0) {
@@ -193,26 +177,23 @@ export function buildLedgerText(summary: RoomSummary, routeReviewMessage?: strin
   } else {
     summary.passengerBills.forEach((passenger) => {
       lines.push(
-        `${passenger.order}. ${cleanText(passenger.name)} ➔ 📍 ${cleanLabel(passenger.pickupLandmark)}`,
-        `   Bill: ${formatMoney(passenger.total)}`
+        `${passenger.order}. ${cleanText(passenger.name)} - ${formatMoney(passenger.total)}`
       )
     })
   }
 
+  const passengerTotal = summary.passengerBills.reduce(
+    (total, passenger) => total + passenger.total,
+    0
+  )
+
   lines.push(
-    "-----------------------",
-    `Base route: ${formatDistance(summary.baseDistanceKm)}`,
-    `Estimated extra distance: ${formatDistance(summary.detourDistanceKm)}`,
-    `Route total (map): ${formatDistance(summary.actualDistanceKm)}`,
-    `Fuel Cost / km: ${formatMoney(summary.fuelCostPerKm)}`,
-    `Additional Cost: ${formatMoney(summary.additionalCost)}`,
+    "",
+    `Total from passengers: ${formatMoney(passengerTotal)}`,
+    `Active passengers: ${summary.passengerBills.length}`,
     routeReviewMessage
-      ? "Driver Share: Review required"
-      : `Driver Share: ${formatMoney(summary.driverShare)}`,
-    routeReviewMessage
-      ? "Settle after manual route review."
-      : "Settle via manual transfer to Driver.",
-    "Drive safe! 🙏"
+      ? `Note: ${cleanText(routeReviewMessage)}`
+      : "Please transfer manually to the driver."
   )
 
   return lines.join("\n")
