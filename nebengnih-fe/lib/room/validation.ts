@@ -1,7 +1,10 @@
 import type { Passenger, RouteSettings } from "./types"
-import { fetchRouteMetrics } from "./osrm"
 
 type RouteValidationTarget = "driver" | "passenger"
+
+type RouteValidationResult =
+  | { allowed: true; message?: string }
+  | { allowed: false; message: string }
 
 function hasCoords(lat?: number, lng?: number) {
   return typeof lat === "number" && Number.isFinite(lat) && typeof lng === "number" && Number.isFinite(lng)
@@ -37,31 +40,17 @@ export function getMissingRouteSetupFields(settings: RouteSettings, driverNickna
   return missing
 }
 
-function buildCrossWaterMessage(target: RouteValidationTarget) {
-  return target === "driver"
-    ? "This route crosses water, uses a ferry, or reaches another island without a continuous road connection. Please choose a different start and destination connected by road."
-    : "This pickup crosses water, uses a ferry, or reaches another island without a continuous road connection. Please choose a pickup connected to the driver route by road."
-}
-
 export async function validateRouteBeforeSave(
   settings: RouteSettings,
   passengers: Passenger[],
-  target: RouteValidationTarget
-) {
+  _target: RouteValidationTarget
+) : Promise<RouteValidationResult> {
   const hasDriverRoute =
     hasCoords(settings.originLat, settings.originLng) &&
     hasCoords(settings.destinationLat, settings.destinationLng)
 
   if (!hasDriverRoute) {
     return { allowed: true as const }
-  }
-
-  const metrics = await fetchRouteMetrics(settings, passengers)
-  if (metrics.routeStatus === "manual-review" && metrics.validationType === "cross-water") {
-    return {
-      allowed: false as const,
-      message: buildCrossWaterMessage(target),
-    }
   }
 
   return { allowed: true as const }

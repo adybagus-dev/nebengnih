@@ -23,7 +23,7 @@ export type RouteSettings = {
 
 export type RouteMetrics = {
   routeStatus: "idle" | "loading" | "ready" | "fallback" | "manual-review"
-  validationType?: "road" | "cross-water"
+  validationType?: "road"
   validationMessage?: string
   baseDistanceKm?: number
   actualDistanceKm?: number

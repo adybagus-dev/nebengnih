@@ -247,13 +247,6 @@ export function RoomProvider({
     roomSignatureRef.current = nextSignature
 
     void persistRoom(room, { trackAsDriver: trackAsDriverRef.current }).catch((error) => {
-      if (
-        error instanceof Error &&
-        error.message.includes("continuous road connection")
-      ) {
-        return
-      }
-
       console.error(error)
     })
   }, [hydrated, room])

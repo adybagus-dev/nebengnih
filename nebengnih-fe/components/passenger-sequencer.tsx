@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { ArrowDown, ArrowUp, Check, LoaderCircle, Plus, Sparkles, SlidersHorizontal } from "lucide-react"
+import { ArrowDown, ArrowUp, Check, LoaderCircle, Plus, Sparkles, SlidersHorizontal, Trash2, X } from "lucide-react"
 import Link from "next/link"
 import { useRoom } from "@/components/providers/room-provider"
 import { formatMoney } from "@/lib/room/calculations"
@@ -10,12 +10,14 @@ import { optimizePassengerOrder } from "@/lib/room/osrm"
 export function PassengerSequencer() {
   const [optimizing, setOptimizing] = useState(false)
   const [optimizationMessage, setOptimizationMessage] = useState("")
+  const [removeTarget, setRemoveTarget] = useState<{ id: string; name: string } | null>(null)
   const {
     room,
     summary,
     movePassenger,
     reorderPassengers,
     setPassengerJoining,
+    removePassenger,
   } = useRoom()
 
   async function handleOptimize() {
@@ -107,6 +109,7 @@ export function PassengerSequencer() {
               onMoveUp={() => movePassenger(passenger.id, "up")}
               onMoveDown={() => movePassenger(passenger.id, "down")}
               onToggle={(next) => setPassengerJoining(passenger.id, next)}
+              onRemove={() => setRemoveTarget({ id: passenger.id, name: passenger.name })}
             />
           )
         })}
@@ -119,6 +122,56 @@ export function PassengerSequencer() {
         <Plus className="size-4" />
         Add New Spot Manually
       </Link>
+
+      {removeTarget ? (
+        <div className="fixed inset-0 z-[1100] flex items-end justify-center bg-black/30 p-4 backdrop-blur-sm sm:items-center">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="remove-passenger-title"
+            className="w-full max-w-sm rounded-3xl border border-border bg-background p-5 shadow-2xl"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 id="remove-passenger-title" className="text-lg font-bold text-foreground">
+                  Remove {removeTarget.name}?
+                </h2>
+                <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
+                  This passenger will be removed from the room lineup and their saved pickup will no longer count in the route.
+                </p>
+              </div>
+              <button
+                type="button"
+                aria-label="Cancel remove passenger"
+                onClick={() => setRemoveTarget(null)}
+                className="flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-secondary"
+              >
+                <X className="size-4" />
+              </button>
+            </div>
+
+            <div className="mt-5 flex gap-2">
+              <button
+                type="button"
+                onClick={() => setRemoveTarget(null)}
+                className="flex-1 rounded-xl border border-border py-3 text-sm font-semibold text-foreground"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  removePassenger(removeTarget.id)
+                  setRemoveTarget(null)
+                }}
+                className="flex-1 rounded-xl bg-destructive py-3 text-sm font-bold text-white"
+              >
+                Remove
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   )
 }
@@ -133,6 +186,7 @@ function PassengerCard({
   onMoveUp,
   onMoveDown,
   onToggle,
+  onRemove,
 }: {
   name: string
   status: string
@@ -143,6 +197,7 @@ function PassengerCard({
   onMoveUp: () => void
   onMoveDown: () => void
   onToggle: (next: boolean) => void
+  onRemove: () => void
 }) {
   return (
     <li
@@ -195,6 +250,15 @@ function PassengerCard({
       >
         {cost}
       </span>
+
+      <button
+        type="button"
+        aria-label={`Remove ${name}`}
+        onClick={onRemove}
+        className="flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+      >
+        <Trash2 className="size-4" />
+      </button>
     </li>
   )
 }

@@ -125,7 +125,7 @@ export function AddSpotSession() {
       <RouteValidationSheet
         open={validationOpen}
         onOpenChange={setValidationOpen}
-        title="Pickup crosses water"
+        title="Pickup not allowed"
         message={saveError}
         actionLabel="Choose another pickup"
       />

@@ -109,51 +109,6 @@ function isUnsupportedRouteResponse(response: Response, json: RouteResponse) {
   )
 }
 
-function routeUsesFerry(route: NonNullable<RouteResponse["routes"]>[number]) {
-  const ferryTerms = ["ferry", "feri", "penyeberangan"]
-
-  return (route.legs ?? []).some((leg) =>
-    (leg.steps ?? []).some((step) => {
-      const routeDetails = [
-        step.mode,
-        step.name,
-        step.ref,
-        step.destinations,
-      ]
-        .filter((value): value is string => Boolean(value))
-        .join(" ")
-        .toLowerCase()
-
-      return ferryTerms.some((term) => routeDetails.includes(term))
-    })
-  )
-}
-
-function isSuspiciousRoadLeg(roadDistanceKm: number, directDistanceKm: number) {
-  if (!Number.isFinite(roadDistanceKm) || !Number.isFinite(directDistanceKm)) return false
-  if (directDistanceKm < 0.25) return false
-
-  const ratio = roadDistanceKm / directDistanceKm
-  const gapKm = roadDistanceKm - directDistanceKm
-
-  if (directDistanceKm < 3) return ratio >= 4 && gapKm >= 6
-  if (directDistanceKm < 10) return ratio >= 3 && gapKm >= 10
-  if (directDistanceKm < 25) return ratio >= 2.3 && gapKm >= 14
-  return ratio >= 1.8 && gapKm >= 25
-}
-
-function routeHasSuspiciousLeg(
-  route: NonNullable<RouteResponse["routes"]>[number],
-  points: Coord[]
-) {
-  const legs = route.legs ?? []
-  if (legs.length !== points.length - 1) return false
-
-  return legs.some((leg, index) =>
-    isSuspiciousRoadLeg(leg.distance / 1000, haversineKm(points[index], points[index + 1]))
-  )
-}
-
 export async function fetchRouteGeometry(settings: RouteSettings, passengers: Passenger[]) {
   const { origin, destination, pickups } = routePoints(settings, passengers)
   const actualPoints = [
@@ -201,21 +156,6 @@ export async function fetchRouteMetrics(settings: RouteSettings, passengers: Pas
   const geodesicBaseKm = routeDistanceKm([origin, destination])
   const geodesicActualKm = routeDistanceKm(actualPoints)
 
-  function crossWaterMetrics() {
-    const manualBaseDistanceKm = Math.max(settings.baseDistanceKm, geodesicBaseKm * 2.2)
-    const manualActualDistanceKm = Math.max(manualBaseDistanceKm, geodesicActualKm * 2.2)
-
-    return {
-      routeStatus: "manual-review" as const,
-      validationType: "cross-water" as const,
-      validationMessage:
-        "This route crosses water, uses a ferry, or reaches another island without a continuous road connection.",
-      baseDistanceKm: manualBaseDistanceKm,
-      actualDistanceKm: manualActualDistanceKm,
-      detourDistanceKm: Math.max(0, manualActualDistanceKm - manualBaseDistanceKm),
-    }
-  }
-
   try {
     const response = await fetch(
       `https://router.project-osrm.org/route/v1/driving/${coordinates}?overview=false&steps=true&annotations=distance`,
@@ -223,7 +163,9 @@ export async function fetchRouteMetrics(settings: RouteSettings, passengers: Pas
     )
     const json = (await response.json()) as RouteResponse
 
-    if (isUnsupportedRouteResponse(response, json)) return crossWaterMetrics()
+    if (isUnsupportedRouteResponse(response, json)) {
+      throw new Error("OSRM returned an unsupported route response")
+    }
     if (!response.ok) throw new Error(json.message ?? "OSRM response not ok")
 
     const actualRoute = json.routes?.[0]
@@ -239,7 +181,9 @@ export async function fetchRouteMetrics(settings: RouteSettings, passengers: Pas
     )
     const baseJson = (await baseResponse.json()) as RouteResponse
 
-    if (isUnsupportedRouteResponse(baseResponse, baseJson)) return crossWaterMetrics()
+    if (isUnsupportedRouteResponse(baseResponse, baseJson)) {
+      throw new Error("OSRM returned an unsupported base route response")
+    }
     if (!baseResponse.ok) throw new Error(baseJson.message ?? "Base OSRM response not ok")
 
     const baseRoute = baseJson.routes?.[0]
@@ -248,16 +192,7 @@ export async function fetchRouteMetrics(settings: RouteSettings, passengers: Pas
       ? baseDistanceMeters / 1000
       : settings.baseDistanceKm
 
-    if (
-      !actualRoute ||
-      !baseRoute ||
-      routeUsesFerry(actualRoute) ||
-      routeUsesFerry(baseRoute) ||
-      routeHasSuspiciousLeg(actualRoute, actualPoints) ||
-      routeHasSuspiciousLeg(baseRoute, [origin, destination])
-    ) {
-      return crossWaterMetrics()
-    }
+    if (!actualRoute || !baseRoute) throw new Error("Missing route geometry")
 
     return {
       routeStatus: "ready" as const,

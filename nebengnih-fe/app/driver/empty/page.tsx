@@ -70,11 +70,7 @@ export default function DriverEmptyStatePage() {
       <RouteValidationSheet
         open={validationOpen}
         onOpenChange={setValidationOpen}
-        title={
-          saveError.includes("crosses water")
-            ? "Route crosses water"
-            : "Complete the route setup"
-        }
+        title="Complete the route setup"
         message={saveError}
         actionLabel="Okay"
       />
