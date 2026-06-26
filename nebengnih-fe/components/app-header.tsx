@@ -66,7 +66,7 @@ export function AppHeader({
             aria-label="Go to NebengNih home"
             className="flex items-center gap-1.5 text-lg font-bold tracking-tight text-primary transition-opacity hover:opacity-80 active:opacity-70"
           >
-            <NebengNihLogo className="size-7 text-primary" />
+            <NebengNihLogo className="size-7 rounded-lg object-cover shadow-sm" />
             <span>NebengNih</span>
           </Link>
 

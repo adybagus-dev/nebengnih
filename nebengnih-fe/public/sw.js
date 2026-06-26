@@ -1,5 +1,11 @@
-const CACHE_NAME = "nebengnih-shell-v2"
-const PRECACHE_URLS = ["/offline", "/manifest.webmanifest", "/icon.svg", "/apple-icon.png"]
+const CACHE_NAME = "nebengnih-shell-v3"
+const PRECACHE_URLS = [
+  "/offline",
+  "/manifest.webmanifest",
+  "/icon-192x192.png",
+  "/icon-512x512.png",
+  "/apple-icon.png",
+]
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
